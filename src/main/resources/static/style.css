@@ -1,0 +1,353 @@
+:root {
+    --space-black: #0b0d17;
+    --star-white: #ffffff;
+    --neon-blue: #00f3ff;
+    --neon-purple: #bc13fe;
+    --glass-bg: rgba(255, 255, 255, 0.05);
+    --glass-border: rgba(255, 255, 255, 0.1);
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--space-black);
+    background-image: 
+        radial-gradient(circle at 10% 20%, rgba(188, 19, 254, 0.2) 0%, transparent 20%),
+        radial-gradient(circle at 90% 80%, rgba(0, 243, 255, 0.15) 0%, transparent 20%);
+    color: var(--star-white);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    overflow-y: auto; /* Allow scroll if needed */
+}
+
+/* 星星背景動畫 */
+.stars {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    background: transparent;
+    z-index: -1;
+}
+.stars::after {
+    content: "";
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background-image: 
+        radial-gradient(2px 2px at 20px 30px, #fff, rgba(0,0,0,0)),
+        radial-gradient(2px 2px at 40px 70px, #fff, rgba(0,0,0,0)),
+        radial-gradient(2px 2px at 50px 160px, #fff, rgba(0,0,0,0)),
+        radial-gradient(2px 2px at 90px 40px, #fff, rgba(0,0,0,0)),
+        radial-gradient(2px 2px at 130px 80px, #fff, rgba(0,0,0,0));
+    background-size: 200px 200px;
+    animation: moveStars 100s linear infinite;
+    opacity: 0.3;
+}
+
+@keyframes moveStars {
+    from { transform: translateY(0); }
+    to { transform: translateY(-1000px); }
+}
+
+.container {
+    width: 400px;
+    padding: 40px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    box-shadow: 0 0 30px rgba(0, 243, 255, 0.1);
+    position: relative;
+    z-index: 10;
+    transition: all 0.3s ease;
+    margin: 20px;
+}
+
+h1, h2, h3 {
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    margin-bottom: 20px;
+    margin-top: 0;
+    text-shadow: 0 0 10px var(--neon-blue);
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 0.9em;
+    color: #aaa;
+    letter-spacing: 1px;
+}
+
+input {
+    width: 100%;
+    padding: 12px;
+    box-sizing: border-box;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    color: var(--star-white);
+    font-size: 1em;
+    outline: none;
+    transition: 0.3s;
+}
+
+input:focus {
+    border-color: var(--neon-blue);
+    box-shadow: 0 0 10px rgba(0, 243, 255, 0.3);
+}
+
+.btn {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 8px;
+    background: linear-gradient(90deg, var(--neon-blue), var(--neon-purple));
+    color: white;
+    font-weight: bold;
+    font-size: 1.1em;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    transition: 0.3s;
+    margin-top: 10px;
+}
+
+.btn:hover {
+    transform: scale(1.02);
+    box-shadow: 0 0 20px rgba(188, 19, 254, 0.5);
+}
+
+.btn-secondary {
+    background: transparent;
+    border: 1px solid var(--glass-border);
+    margin-top: 10px;
+    font-size: 0.9em;
+}
+
+.btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: none;
+    box-shadow: none;
+}
+
+/* 返回按鈕 */
+.btn-back {
+    background: transparent;
+    border: none;
+    color: var(--neon-blue);
+    font-size: 1em;
+    cursor: pointer;
+    padding: 5px 10px;
+    margin-bottom: 0;
+    transition: 0.3s;
+}
+.btn-back:hover {
+    color: var(--neon-purple);
+    transform: translateX(-5px);
+}
+.header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+.header-row h2 {
+    margin: 0;
+    flex-grow: 1;
+    text-align: right; 
+    /* 讓標題靠右或置中看個人喜好，這裡為了平衡左邊按鈕，讓標題靠右稍微平衡一點，或者設為 center 並調整 */
+    text-align: center;
+}
+
+
+.toggle-text {
+    text-align: center;
+    margin-top: 20px;
+    font-size: 0.9em;
+    color: #ccc;
+}
+
+.toggle-text span {
+    color: var(--neon-blue);
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+/* 隱藏/顯示控制 */
+.hidden {
+    display: none !important;
+}
+
+/* 訊息提示 */
+#message {
+    text-align: center;
+    margin-top: 15px;
+    min-height: 20px;
+    font-size: 0.9em;
+}
+.error { color: #ff4d4d; text-shadow: 0 0 5px #ff4d4d; }
+.success { color: #00ff88; text-shadow: 0 0 5px #00ff88; }
+
+/* 個人資料面板 */
+.profile-info {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.profile-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--glass-border);
+    padding-bottom: 10px;
+}
+
+.profile-label {
+    color: var(--neon-purple);
+    font-weight: bold;
+}
+
+/* 主畫面導航網格 */
+.nav-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.nav-item {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.nav-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--neon-blue);
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px rgba(0, 243, 255, 0.2);
+}
+
+.nav-item h3 {
+    font-size: 1.1em;
+    margin-bottom: 5px;
+    color: var(--star-white);
+    text-shadow: none;
+}
+
+.nav-item p {
+    font-size: 0.8em;
+    color: #aaa;
+    margin: 0;
+}
+
+/* --- 錢包樣式 --- */
+.wallet-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 15px;
+}
+
+.wallet-card {
+    background: rgba(0, 243, 255, 0.05);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: 0.3s;
+}
+
+.wallet-card:hover {
+    background: rgba(0, 243, 255, 0.1);
+    border-color: var(--neon-blue);
+}
+
+.coin-info h3 {
+    margin: 0 0 5px 0;
+    text-align: left;
+    font-size: 1.2em;
+    color: var(--neon-blue);
+}
+
+.coin-info p {
+    margin: 0;
+    font-size: 0.9em;
+    color: #aaa;
+}
+
+.balance-info {
+    text-align: right;
+}
+
+.balance-val {
+    font-size: 1.2em;
+    font-weight: bold;
+    display: block;
+}
+
+.btn-sm {
+    padding: 5px 10px;
+    font-size: 0.8em;
+    margin-top: 5px;
+    width: auto;
+    display: inline-block;
+}
+
+/* --- Modal (彈出視窗) --- */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(5px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+}
+
+.modal-content {
+    width: 300px;
+    background: #1a1d2e; /* Slightly lighter than black */
+    border: 1px solid var(--neon-blue);
+    border-radius: 15px;
+    padding: 25px;
+    position: relative;
+    box-shadow: 0 0 20px rgba(0, 243, 255, 0.3);
+}
+
+.modal-close {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    color: #aaa;
+    cursor: pointer;
+    font-size: 1.2em;
+}
+
+.modal-close:hover {
+    color: white;
+}

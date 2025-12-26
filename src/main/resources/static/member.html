@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>星際交易所 - 主控台</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* 額外樣式：控制編輯模式切換 */
+        .edit-mode { display: none; } /* 預設隱藏編輯元件 */
+        .editing .edit-mode { display: block; } /* 編輯中顯示編輯元件 */
+        .editing .view-mode { display: none; } /* 編輯中隱藏檢視元件 */
+        
+        /* 讓按鈕並排 */
+        .btn-group {
+            display: flex;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="stars"></div>
+
+    <!-- 1. 登入面板 -->
+    <div class="container" id="loginPanel">
+        <h1>指揮中心</h1>
+        <div class="form-group">
+            <label>呼號 (帳號)</label>
+            <input type="text" id="loginAccount" placeholder="請輸入您的 ID">
+        </div>
+        <div class="form-group">
+            <label>通行碼 (密碼)</label>
+            <input type="password" id="loginPassword" placeholder="請輸入您的密碼">
+        </div>
+        <button class="btn" onclick="login()">啟動連結</button>
+        <div class="toggle-text">
+            沒有權限? <span onclick="showRegister()">申請加入</span>
+        </div>
+        <div id="loginMsg"></div>
+    </div>
+
+    <!-- 2. 註冊面板 -->
+    <div class="container hidden" id="registerPanel">
+        <h2>新進學員</h2>
+        <div class="form-group">
+            <label>帳號</label>
+            <input type="text" id="regAccount">
+        </div>
+        <div class="form-group">
+            <label>密碼</label>
+            <input type="password" id="regPassword">
+        </div>
+        <div class="form-group">
+            <label>姓名</label>
+            <input type="text" id="regName">
+        </div>
+        <div class="form-group">
+            <label>通訊號碼 (電話)</label>
+            <input type="text" id="regNumber">
+        </div>
+        <button class="btn" onclick="register()">提交資料</button>
+        <div class="toggle-text">
+            已有 ID? <span onclick="showLogin()">返回登入</span>
+        </div>
+        <div id="regMsg"></div>
+    </div>
+
+    <!-- 3. 主畫面 (Dashboard) -->
+    <div class="container hidden" id="dashboardPanel">
+        <h2>艦橋主控台</h2>
+        <p style="text-align: center; color: #aaa; margin-bottom: 30px;">
+            歡迎歸隊，指揮官 <span id="dashName" style="color: var(--neon-blue);">---</span>
+        </p>
+        
+        <div class="nav-grid">
+            <div class="nav-item" onclick="showProfile()">
+                <h3>會員資訊</h3>
+                <p>管理個人檔案</p>
+            </div>
+            <div class="nav-item" onclick="showWallet()">
+                <h3>我的錢包</h3>
+                <p>資產與餘額</p>
+            </div>
+            <div class="nav-item" onclick="showTrade()">
+                <h3>交易畫面</h3>
+                <p>市場買賣操作</p>
+            </div>
+            <div class="nav-item" onclick="showHistory()">
+                <h3>交易紀錄</h3>
+                <p>歷史訂單查詢</p>
+            </div>
+        </div>
+
+        <button class="btn btn-secondary" onclick="logout()" style="margin-top: 30px;">終止連線 (登出)</button>
+    </div>
+
+    <!-- 4. 功能分頁：會員資訊 -->
+    <div class="container hidden" id="profilePanel">
+        <div class="header-row">
+            <button class="btn-back" onclick="showDashboard()">← 返回</button>
+            <h2>飛行員檔案</h2>
+        </div>
+        
+        <!-- 個人資料內容區 -->
+        <div id="profileContent" class="profile-info"> <!-- 預設不是 .editing -->
+            
+            <div class="profile-row">
+                <span class="profile-label">帳號</span>
+                <span id="displayAccount">---</span>
+            </div>
+
+            <div class="form-group">
+                <label>姓名</label>
+                <!-- 檢視模式 -->
+                <div class="view-mode" id="viewName">---</div>
+                <!-- 編輯模式 -->
+                <input type="text" class="edit-mode" id="updateName">
+            </div>
+
+            <div class="form-group">
+                <label>通訊號碼 (電話)</label>
+                <!-- 檢視模式 -->
+                <div class="view-mode" id="viewNumber">---</div>
+                <!-- 編輯模式 -->
+                <input type="text" class="edit-mode" id="updateNumber">
+            </div>
+
+            <div class="form-group edit-mode"> <!-- 只有編輯模式才顯示密碼欄位 -->
+                <label>新密碼 (選填)</label>
+                <input type="password" id="updatePassword" placeholder="留空則不修改">
+            </div>
+
+        </div>
+
+        <!-- 按鈕區 -->
+        <div style="margin-top: 20px;">
+            <button id="btnEdit" class="btn view-mode" onclick="enableEditMode()">修改資料</button>
+            
+            <div id="actionBtns" class="btn-group edit-mode">
+                <button class="btn" onclick="updateProfile()">保存變更</button>
+                <button class="btn btn-secondary" onclick="disableEditMode()">取消</button>
+            </div>
+        </div>
+
+        <div id="profileMsg"></div>
+    </div>
+
+    <!-- 5. 功能分頁：我的錢包 -->
+    <div class="container hidden" id="walletPanel">
+        <div class="header-row">
+            <button class="btn-back" onclick="showDashboard()">← 返回</button>
+            <h2>我的錢包</h2>
+            <button class="btn btn-sm" style="width: auto; background: linear-gradient(90deg, #ff4d4d, #bc13fe); margin: 0;" onclick="resetWallets()">一鍵重置</button>
+        </div>
+        
+        <div id="walletList" class="wallet-grid">
+            <!-- JS 將會動態插入錢包卡片 -->
+        </div>
+
+        <!-- 儲值彈出視窗 -->
+        <div id="depositModal" class="modal-overlay hidden">
+            <div class="modal-content">
+                <span class="modal-close" onclick="closeDepositModal()">&times;</span>
+                <h3>資產儲值</h3>
+                <p style="text-align: center; color: var(--neon-blue);" id="depositCoinName">USDT</p>
+                <div class="form-group">
+                    <label>金額</label>
+                    <input type="number" id="depositAmount" placeholder="輸入數量">
+                </div>
+                <button class="btn" onclick="submitDeposit()">確認儲值</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 6. 功能分頁：交易畫面 -->
+    <div class="container hidden" id="tradePanel" style="width: 1100px; display: flex; gap: 20px; align-items: flex-start;">
+        
+        <!-- 左側：下單區 -->
+        <div style="flex: 1;">
+            <div class="header-row">
+                <button class="btn-back" onclick="showDashboard()">← 返回</button>
+                <h2>交易下單</h2>
+            </div>
+            
+            <div class="form-group">
+                <label>交易對</label>
+                <select id="tradeSymbol" onchange="fetchOrderBook()" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; border-radius: 8px;">
+                    <option value="BTCUSDT">BTC/USDT</option>
+                    <option value="ETHUSDT">ETH/USDT</option>
+                    <option value="BNBUSDT">BNB/USDT</option>
+                </select>
+            </div>
+
+            <div class="btn-group" style="margin-bottom: 20px;">
+                <button class="btn" id="btnBuy" onclick="setOrderSide('BUY')" style="background: var(--neon-blue); color: black;">買入 (BUY)</button>
+                <button class="btn btn-secondary" id="btnSell" onclick="setOrderSide('SELL')">賣出 (SELL)</button>
+            </div>
+
+            <div class="form-group">
+                <label>訂單類型</label>
+                <select id="tradeType" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; border-radius: 8px;" disabled>
+                    <option value="LIMIT">限價單 (Limit)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>價格 (Price)</label>
+                <input type="number" id="tradePrice" placeholder="輸入價格">
+            </div>
+
+            <div class="form-group">
+                <label>數量 (Quantity)</label>
+                <input type="number" id="tradeQuantity" placeholder="輸入數量">
+            </div>
+
+            <button class="btn" onclick="submitOrder()">下單</button>
+        </div>
+
+        <!-- 中間：訂單牆 (Order Book) -->
+        <div style="flex: 1; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 12px; height: 100%; min-height: 400px;">
+            <div style="text-align: center; margin-bottom: 10px; font-weight: bold;">訂單牆</div>
+            
+            <!-- Asks (賣單) - 紅色 -->
+            <div id="orderBookAsks" style="display: flex; flex-direction: column-reverse; gap: 2px; min-height: 150px; justify-content: flex-end;">
+                <!-- JS Insert -->
+            </div>
+
+            <div style="margin: 10px 0; border-top: 1px dashed #555;"></div>
+
+            <!-- Bids (買單) - 綠色 -->
+            <div id="orderBookBids" style="display: flex; flex-direction: column; gap: 2px;">
+                <!-- JS Insert -->
+            </div>
+        </div>
+
+        <!-- 右側：訂單列表 -->
+        <div style="flex: 1; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 12px; height: 100%; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h3 style="margin: 0; font-size: 1.1em;">我的委託</h3>
+                <button class="btn btn-sm" onclick="fetchMyOrders()" style="width: auto;">↻</button>
+            </div>
+            
+            <!-- 篩選分頁按鈕 -->
+            <div class="btn-group" style="margin-bottom: 15px; gap: 5px;">
+                <button class="btn btn-sm" id="filterALL" onclick="setOrderFilter('ALL')" style="font-size: 0.8em; flex: 1; background: var(--neon-blue); color: black; border: 1px solid var(--neon-blue);">全部</button>
+                <button class="btn btn-sm" id="filterOPEN" onclick="setOrderFilter('OPEN')" style="font-size: 0.8em; flex: 1; background: transparent; border: 1px solid #555;">未成交</button>
+                <button class="btn btn-sm" id="filterFILLED" onclick="setOrderFilter('FILLED')" style="font-size: 0.8em; flex: 1; background: transparent; border: 1px solid #555;">已成交</button>
+                <button class="btn btn-sm" id="filterCANCELED" onclick="setOrderFilter('CANCELED')" style="font-size: 0.8em; flex: 1; background: transparent; border: 1px solid #555;">已取消</button>
+            </div>
+
+            <div id="orderList" style="display: flex; flex-direction: column; gap: 10px;">
+                <!-- 訂單卡片 -->
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 7. 功能分頁：交易紀錄 -->
+    <div class="container hidden" id="historyPanel">
+        <div class="header-row">
+            <button class="btn-back" onclick="showDashboard()">← 返回</button>
+            <h2>交易紀錄</h2>
+        </div>
+        <div style="text-align: center; padding: 50px 0; color: #aaa;">
+            <p>歷史數據檢索中...</p>
+            <p>(Coming Soon)</p>
+        </div>
+    </div>
+
+    <script src="script.js?v=8"></script>
+</body>
+</html>
