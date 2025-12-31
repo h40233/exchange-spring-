@@ -4,6 +4,8 @@ const SUPPORTED_COINS = ['USDT', 'BTC', 'ETH', 'BNB']; // 支援的預設幣種
 
 // --- 導航與面板控制 ---
 
+let orderBookInterval = null;
+
 function hideAllPanels() {
     const panels = ['loginPanel', 'registerPanel', 'dashboardPanel', 'profilePanel', 'walletPanel', 'tradePanel', 'historyPanel'];
     panels.forEach(id => {
@@ -13,6 +15,11 @@ function hideAllPanels() {
     // 同時關閉所有 Modal
     closeDepositModal();
     clearMsgs();
+
+    if (orderBookInterval) {
+        clearInterval(orderBookInterval);
+        orderBookInterval = null;
+    }
 }
 
 function showPanel(panelId) {
@@ -43,12 +50,13 @@ function showTrade() {
     showPanel('tradePanel'); 
     fetchMyOrders();
     fetchOrderBook();
+    // Start polling the order book every 1 second
+    console.log("Starting Order Book Polling...");
+    orderBookInterval = setInterval(fetchOrderBook, 1000);
 }
 function showHistory() { showPanel('historyPanel'); }
 
 // --- 訊息處理 ---
-
-
 
 function clearMsgs() {
     const msgIds = ['loginMsg', 'regMsg', 'profileMsg'];
@@ -290,6 +298,7 @@ async function resetWallets() {
 let currentOrderSide = 'BUY';
 
 function setOrderSide(side) {
+    console.log("Switching Order Side to:", side);
     currentOrderSide = side;
     const btnBuy = document.getElementById('btnBuy');
     const btnSell = document.getElementById('btnSell');
@@ -346,6 +355,7 @@ async function submitOrder() {
             document.getElementById('tradePrice').value = '';
             document.getElementById('tradeQuantity').value = '';
             fetchMyOrders(); // 刷新訂單列表
+            fetchOrderBook(); // 立即刷新訂單牆
         } else {
             const txt = await res.text();
             alert('下單失敗: ' + txt);
@@ -460,6 +470,7 @@ async function cancelOrder(orderId) {
         const res = await fetch(`/api/orders/${orderId}/cancel`, { method: 'POST' });
         if (res.ok) {
             fetchMyOrders();
+            fetchOrderBook(); // 立即刷新訂單牆
         } else {
             alert('撤單失敗');
         }
@@ -492,18 +503,18 @@ function renderOrderBook(data) {
 
     // Asks (Sorted Price ASC) -> Flex Column Reverse handles display order
     data.asks.forEach(e => {
-        const div = createBookItem(e.price, e.quantity, '#ff4d4d');
+        const div = createBookItem(e.price, e.quantity, '#ff4d4d', 'SELL');
         asksEl.appendChild(div);
     });
 
     // Bids (Sorted Price DESC)
     data.bids.forEach(e => {
-        const div = createBookItem(e.price, e.quantity, '#00f3ff');
+        const div = createBookItem(e.price, e.quantity, '#00f3ff', 'BUY');
         bidsEl.appendChild(div);
     });
 }
 
-function createBookItem(price, qty, color) {
+function createBookItem(price, qty, color, itemSide) {
     const div = document.createElement('div');
     div.style.display = 'flex';
     div.style.justifyContent = 'space-between';
@@ -513,7 +524,13 @@ function createBookItem(price, qty, color) {
     div.style.background = 'rgba(255,255,255,0.02)';
     
     div.onclick = () => {
+        console.log(`Clicked OrderBook Item: ${price} ${itemSide}`);
         document.getElementById('tradePrice').value = price;
+        // Switch to the opposite side
+        // If I click a SELL order (Ask), I want to BUY.
+        // If I click a BUY order (Bid), I want to SELL.
+        const targetSide = (itemSide === 'BUY') ? 'SELL' : 'BUY';
+        setOrderSide(targetSide);
     };
     
     div.onmouseover = () => div.style.background = 'rgba(255,255,255,0.1)';
