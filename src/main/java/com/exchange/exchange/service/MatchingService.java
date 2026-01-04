@@ -31,6 +31,9 @@ public class MatchingService {
     
     @Autowired
     private SymbolRepository symbolRepository;
+    
+    @Autowired
+    private PositionService positionService;
 
     @Transactional
     public void matchOrder(Order takerOrder) {
@@ -45,11 +48,11 @@ public class MatchingService {
         if (takerOrder.getSide() == OrderSide.BUY) {
             // Taker BUY -> Look for SELLs (Price <= TakerPrice)
             matchingOrders = orderRepository.findMatchingSellOrders(
-                    takerOrder.getSymbolId(), OrderSide.SELL, activeStatuses, takerOrder.getPrice());
+                    takerOrder.getSymbolId(), OrderSide.SELL, takerOrder.getTradeType(), activeStatuses, takerOrder.getPrice());
         } else {
             // Taker SELL -> Look for BUYs (Price >= TakerPrice)
             matchingOrders = orderRepository.findMatchingBuyOrders(
-                    takerOrder.getSymbolId(), OrderSide.BUY, activeStatuses, takerOrder.getPrice());
+                    takerOrder.getSymbolId(), OrderSide.BUY, takerOrder.getTradeType(), activeStatuses, takerOrder.getPrice());
         }
 
         if (matchingOrders.isEmpty()) return;
@@ -78,6 +81,7 @@ public class MatchingService {
             trade.setPrice(matchPrice);
             trade.setQuantity(matchQty);
             trade.setTakerSide(takerOrder.getSide());
+            trade.setTradeType(takerOrder.getTradeType());
             trade.setExecutedAt(LocalDateTime.now());
             // Fee logic can be added later
             tradeRepository.save(trade);
@@ -86,7 +90,45 @@ public class MatchingService {
             updateOrder(takerOrder, matchQty, matchPrice);
             updateOrder(makerOrder, matchQty, matchPrice);
             
-            // 5. Refund Excess Margin for Taker BUY
+            // 5. Update Positions (For Contract Only)
+            /*
+            if (takerOrder.getTradeType() == com.exchange.exchange.enums.TradeType.CONTRACT) {
+                // Taker
+                positionService.processTrade(takerOrder.getMemberId(), takerOrder.getSymbolId(), 
+                                             takerOrder.getSide(), matchPrice, matchQty);
+                // Maker
+                positionService.processTrade(makerOrder.getMemberId(), makerOrder.getSymbolId(), 
+                                             makerOrder.getSide(), matchPrice, matchQty);
+            } else 
+            */
+            if (takerOrder.getTradeType() == com.exchange.exchange.enums.TradeType.SPOT) {
+                // 5b. Settlement for Spot Trading
+                BigDecimal cost = matchPrice.multiply(matchQty);
+                
+                // Taker Settlement
+                if (takerOrder.getSide() == OrderSide.BUY) {
+                    // Taker BUY: Spent Quote (Frozen), Gained Base
+                    walletService.deductFrozen(takerOrder.getMemberId(), symbol.getQuoteCoinId(), cost, "SPOT_BUY_COST");
+                    walletService.addBalance(takerOrder.getMemberId(), symbol.getBaseCoinId(), matchQty, "SPOT_BUY_GET");
+                } else {
+                    // Taker SELL: Spent Base (Frozen), Gained Quote
+                    walletService.deductFrozen(takerOrder.getMemberId(), symbol.getBaseCoinId(), matchQty, "SPOT_SELL_COST");
+                    walletService.addBalance(takerOrder.getMemberId(), symbol.getQuoteCoinId(), cost, "SPOT_SELL_GET");
+                }
+
+                // Maker Settlement
+                if (makerOrder.getSide() == OrderSide.BUY) {
+                    // Maker BUY: Spent Quote (Frozen), Gained Base
+                    walletService.deductFrozen(makerOrder.getMemberId(), symbol.getQuoteCoinId(), cost, "SPOT_BUY_COST");
+                    walletService.addBalance(makerOrder.getMemberId(), symbol.getBaseCoinId(), matchQty, "SPOT_BUY_GET");
+                } else {
+                    // Maker SELL: Spent Base (Frozen), Gained Quote
+                    walletService.deductFrozen(makerOrder.getMemberId(), symbol.getBaseCoinId(), matchQty, "SPOT_SELL_COST");
+                    walletService.addBalance(makerOrder.getMemberId(), symbol.getQuoteCoinId(), cost, "SPOT_SELL_GET");
+                }
+            }
+
+            // 6. Refund Excess Margin for Taker BUY
             // If Taker BUY limit is 50000, but matched at 49000. 
             // We locked 50000 * Qty. Actual cost 49000 * Qty. Refund 1000 * Qty.
             if (takerOrder.getSide() == OrderSide.BUY && takerOrder.getPrice().compareTo(matchPrice) > 0) {

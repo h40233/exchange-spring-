@@ -10,6 +10,7 @@ public class OrderRequest {
     private OrderType type;
     private BigDecimal price;
     private BigDecimal quantity;
+    private com.exchange.exchange.enums.TradeType tradeType;
 
     public String getSymbolId() {
         return symbolId;
@@ -49,5 +50,13 @@ public class OrderRequest {
 
     public void setQuantity(BigDecimal quantity) {
         this.quantity = quantity;
+    }
+
+    public com.exchange.exchange.enums.TradeType getTradeType() {
+        return tradeType;
+    }
+
+    public void setTradeType(com.exchange.exchange.enums.TradeType tradeType) {
+        this.tradeType = tradeType;
     }
 }

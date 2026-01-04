@@ -51,7 +51,18 @@ public class Order {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    @Column(name = "trade_type", length = 10, columnDefinition = "enum('spot','contract') COLLATE utf8mb3_bin")
+    private com.exchange.exchange.enums.TradeType tradeType;
+
     public Order() {
+    }
+
+    public com.exchange.exchange.enums.TradeType getTradeType() {
+        return tradeType;
+    }
+
+    public void setTradeType(com.exchange.exchange.enums.TradeType tradeType) {
+        this.tradeType = tradeType;
     }
 
     public Integer getOrderId() {

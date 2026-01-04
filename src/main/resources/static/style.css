@@ -168,9 +168,7 @@ input:focus {
 .header-row h2 {
     margin: 0;
     flex-grow: 1;
-    text-align: right; 
-    /* 讓標題靠右或置中看個人喜好，這裡為了平衡左邊按鈕，讓標題靠右稍微平衡一點，或者設為 center 並調整 */
-    text-align: center;
+    text-align: center; 
 }
 
 
@@ -350,4 +348,35 @@ input:focus {
 
 .modal-close:hover {
     color: white;
+}
+
+/* Custom Searchable Dropdown */
+.dropdown-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    max-height: 250px;
+    overflow-y: auto;
+    background: #000000; /* Fully Opaque Black */
+    border: 2px solid var(--neon-blue); /* Thicker border */
+    border-radius: 8px;
+    z-index: 9999;
+    box-shadow: 0 0 15px rgba(0, 243, 255, 0.2); /* Glow */
+    margin-top: 5px;
+}
+.dropdown-item {
+    padding: 12px;
+    cursor: pointer;
+    color: white;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    transition: background 0.2s;
+}
+.dropdown-item:last-child {
+    border-bottom: none;
+}
+.dropdown-item:hover {
+    background: rgba(0, 243, 255, 0.2);
+    color: var(--neon-blue);
+    font-weight: bold;
 }

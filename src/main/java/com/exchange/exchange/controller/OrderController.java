@@ -11,12 +11,19 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+import com.exchange.exchange.enums.TradeType;
+
+import com.exchange.exchange.repository.TradeRepository;
+
 @RestController
 @RequestMapping("/api/orders")
 public class OrderController {
 
     @Autowired
     private OrderService orderService;
+    
+    @Autowired
+    private TradeRepository tradeRepository;
 
     private Integer getMemberId(HttpSession session) {
         return (Integer) session.getAttribute("memberId");
@@ -31,9 +38,59 @@ public class OrderController {
         return ResponseEntity.ok(orders);
     }
 
+    @GetMapping("/trades")
+    public ResponseEntity<?> getMyTrades(HttpSession session) {
+        Integer memberId = getMemberId(session);
+        if (memberId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        
+        List<com.exchange.exchange.dto.TradeQueryDTO> rawTrades = tradeRepository.findTradeHistory(memberId);
+        List<com.exchange.exchange.dto.TradeRecordDTO> history = new java.util.ArrayList<>();
+        
+        for (com.exchange.exchange.dto.TradeQueryDTO item : rawTrades) {
+            com.exchange.exchange.entity.Trade t = item.getTrade();
+            
+            // If I am Taker -> Record 1
+            if (Boolean.TRUE.equals(item.getIsTakerMine())) {
+                 com.exchange.exchange.dto.TradeRecordDTO dto = new com.exchange.exchange.dto.TradeRecordDTO();
+                 dto.setTradeId(t.getTradeId());
+                 dto.setSymbolId(t.getSymbolId());
+                 dto.setSide(t.getTakerSide()); // Taker Side is MY side
+                 dto.setPrice(t.getPrice());
+                 dto.setQuantity(t.getQuantity());
+                 dto.setExecutedAt(t.getExecutedAt());
+                 dto.setTradeType(t.getTradeType());
+                 dto.setRole("TAKER");
+                 history.add(dto);
+            }
+            
+            // If I am Maker -> Record 2 (Can exist simultaneously with Taker if self-trade)
+            if (Boolean.TRUE.equals(item.getIsMakerMine())) {
+                 com.exchange.exchange.dto.TradeRecordDTO dto = new com.exchange.exchange.dto.TradeRecordDTO();
+                 dto.setTradeId(t.getTradeId());
+                 dto.setSymbolId(t.getSymbolId());
+                 // Maker Side is OPPOSITE of Taker Side
+                 dto.setSide(t.getTakerSide() == com.exchange.exchange.enums.OrderSide.BUY ? 
+                             com.exchange.exchange.enums.OrderSide.SELL : com.exchange.exchange.enums.OrderSide.BUY);
+                 dto.setPrice(t.getPrice());
+                 dto.setQuantity(t.getQuantity());
+                 dto.setExecutedAt(t.getExecutedAt());
+                 dto.setTradeType(t.getTradeType());
+                 dto.setRole("MAKER");
+                 history.add(dto);
+            }
+        }
+        
+        // Sort by time descending
+        history.sort((a,b) -> b.getExecutedAt().compareTo(a.getExecutedAt()));
+        
+        return ResponseEntity.ok(history);
+    }
+
+
     @GetMapping("/book/{symbolId}")
-    public ResponseEntity<?> getOrderBook(@PathVariable String symbolId) {
-        return ResponseEntity.ok(orderService.getOrderBook(symbolId));
+    public ResponseEntity<?> getOrderBook(@PathVariable String symbolId,
+                                          @RequestParam(required = false, defaultValue = "SPOT") TradeType type) {
+        return ResponseEntity.ok(orderService.getOrderBook(symbolId, type));
     }
 
     @PostMapping
@@ -52,7 +109,7 @@ public class OrderController {
             return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(e.getMessage());
         } catch (Exception e) {
             e.printStackTrace();
-            return ResponseEntity.internalServerError().body("Order creation failed");
+            return ResponseEntity.internalServerError().body("Order creation failed: " + e.toString() + " | " + e.getMessage());
         }
     }
 

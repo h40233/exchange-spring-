@@ -20,7 +20,6 @@ public class Position {
     @Column(name = "symbolID", length = 45)
     private String symbolId;
 
-    @Enumerated(EnumType.STRING)
     @Column(length = 10)
     private PositionSide side;
 
@@ -33,7 +32,6 @@ public class Position {
     @Column(precision = 36, scale = 18)
     private BigDecimal pnl;
 
-    @Enumerated(EnumType.STRING)
     @Column(length = 10)
     private PositionStatus status;
 

@@ -82,14 +82,17 @@
                 <h3>我的錢包</h3>
                 <p>資產與餘額</p>
             </div>
-            <div class="nav-item" onclick="showTrade()">
-                <h3>交易畫面</h3>
-                <p>市場買賣操作</p>
+            <!-- Split Trade Tabs -->
+            <div class="nav-item" onclick="showSpot()">
+                <h3>交易中心</h3>
+                <p>Trading Center</p>
             </div>
-            <div class="nav-item" onclick="showHistory()">
-                <h3>交易紀錄</h3>
-                <p>歷史訂單查詢</p>
+            <!--
+            <div class="nav-item" onclick="showContract()">
+                <h3>合約交易</h3>
+                <p>Contract Trading</p>
             </div>
+            -->
         </div>
 
         <button class="btn btn-secondary" onclick="logout()" style="margin-top: 30px;">終止連線 (登出)</button>
@@ -154,6 +157,25 @@
             <button class="btn btn-sm" style="width: auto; background: linear-gradient(90deg, #ff4d4d, #bc13fe); margin: 0;" onclick="resetWallets()">一鍵重置</button>
         </div>
         
+        <div class="wallet-controls" style="margin-bottom: 20px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px;">
+            <div class="control-group">
+                <label style="margin-right: 5px;">排序:</label>
+                <select id="walletSortBy" onchange="renderWallets()" style="padding: 5px; border-radius: 4px; border: 1px solid #555; background: #222; color: white;">
+                    <option value="NAME">幣種名稱</option>
+                    <option value="BALANCE">持有數量</option>
+                    <option value="VALUE">USDT 價值</option>
+                </select>
+                <select id="walletSortOrder" onchange="renderWallets()" style="padding: 5px; border-radius: 4px; border: 1px solid #555; background: #222; color: white;">
+                    <option value="ASC">由低到高</option>
+                    <option value="DESC">由高到低</option>
+                </select>
+            </div>
+            <div class="control-group" style="display: flex; align-items: center;">
+                <input type="checkbox" id="walletHideZero" onchange="renderWallets()" style="margin-right: 5px;">
+                <label for="walletHideZero" style="cursor: pointer;">隱藏 0 餘額</label>
+            </div>
+        </div>
+
         <div id="walletList" class="wallet-grid">
             <!-- JS 將會動態插入錢包卡片 -->
         </div>
@@ -173,101 +195,124 @@
         </div>
     </div>
 
-    <!-- 6. 功能分頁：交易畫面 -->
-    <div class="container hidden" id="tradePanel" style="width: 1100px; display: flex; gap: 20px; align-items: flex-start;">
+    <!-- 6. 功能分頁：交易畫面 (Spot & Contract 共用) -->
+    <div class="container hidden" id="tradePanel" style="width: 1100px; display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start;">
         
-        <!-- 左側：下單區 -->
-        <div style="flex: 1;">
-            <div class="header-row">
-                <button class="btn-back" onclick="showDashboard()">← 返回</button>
-                <h2>交易下單</h2>
-            </div>
-            
-            <div class="form-group">
-                <label>交易對</label>
-                <select id="tradeSymbol" onchange="fetchOrderBook()" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; border-radius: 8px;">
-                    <option value="BTCUSDT">BTC/USDT</option>
-                    <option value="ETHUSDT">ETH/USDT</option>
-                    <option value="BNBUSDT">BNB/USDT</option>
-                </select>
+        <!-- Top Row: Trading Interface -->
+        <div style="display:flex; gap:20px; width:100%;">
+            <!-- 左側：下單區 -->
+            <div style="flex: 1;">
+                <div class="header-row">
+                    <button class="btn-back" onclick="showDashboard()">← 返回</button>
+                    <h2 id="tradePanelTitle">交易下單</h2>
+                </div>
+                
+                <!-- Trade Mode Buttons removed (Implicit by entry) -->
+
+                <div class="form-group">
+                    <label id="labelSymbol">交易對</label>
+                    <div class="searchable-dropdown" style="position: relative;">
+                        <input type="text" id="tradeSymbolSearch" placeholder="搜尋或選擇..." autocomplete="off" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; border-radius: 8px;">
+                        <input type="hidden" id="tradeSymbol">
+                        <div id="tradeSymbolList" class="dropdown-list hidden">
+                            <!-- JS Insert -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="btn-group" style="margin-bottom: 20px;">
+                    <button class="btn" id="btnBuy" onclick="setOrderSide('BUY')" style="background: var(--neon-blue); color: black;">買入 (BUY)</button>
+                    <button class="btn btn-secondary" id="btnSell" onclick="setOrderSide('SELL')">賣出 (SELL)</button>
+                </div>
+
+                <div class="form-group">
+                    <label>訂單類型</label>
+                    <select id="tradeType" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; border-radius: 8px;" disabled>
+                        <option value="LIMIT">限價單 (Limit)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>價格 (Price)</label>
+                    <input type="number" id="tradePrice" placeholder="輸入價格">
+                </div>
+
+                <div class="form-group">
+                    <label>數量 (Quantity)</label>
+                    <input type="number" id="tradeQuantity" placeholder="輸入數量">
+                </div>
+
+                <button class="btn" onclick="submitOrder()">下單</button>
             </div>
 
-            <div class="btn-group" style="margin-bottom: 20px;">
-                <button class="btn" id="btnBuy" onclick="setOrderSide('BUY')" style="background: var(--neon-blue); color: black;">買入 (BUY)</button>
-                <button class="btn btn-secondary" id="btnSell" onclick="setOrderSide('SELL')">賣出 (SELL)</button>
+            <!-- 中間：訂單牆 (Order Book) -->
+            <div style="flex: 1; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 12px; height: 100%; min-height: 400px;">
+                <div style="text-align: center; margin-bottom: 10px; font-weight: bold;">訂單牆</div>
+                
+                <!-- Asks (賣單) - 紅色 -->
+                <div id="orderBookAsks" style="display: flex; flex-direction: column-reverse; gap: 2px; min-height: 150px; justify-content: flex-end;">
+                    <!-- JS Insert -->
+                </div>
+
+                <div style="margin: 10px 0; border-top: 1px dashed #555;"></div>
+
+                <!-- Bids (買單) - 綠色 -->
+                <div id="orderBookBids" style="display: flex; flex-direction: column; gap: 2px;">
+                    <!-- JS Insert -->
+                </div>
             </div>
 
-            <div class="form-group">
-                <label>訂單類型</label>
-                <select id="tradeType" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; border-radius: 8px;" disabled>
-                    <option value="LIMIT">限價單 (Limit)</option>
-                </select>
-            </div>
+            <!-- 右側：訂單列表 -->
+            <div style="flex: 1; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 12px; height: 100%; overflow-y: auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h3 style="margin: 0; font-size: 1.1em;">我的委託</h3>
+                    <button class="btn btn-sm" onclick="fetchMyOrders()" style="width: auto;">↻</button>
+                </div>
+                
+                <!-- 篩選分頁按鈕 -->
+                <div class="btn-group" style="margin-bottom: 15px; gap: 5px;">
+                    <button class="btn btn-sm" id="filterALL" onclick="setOrderFilter('ALL')" style="font-size: 0.8em; flex: 1; background: var(--neon-blue); color: black; border: 1px solid var(--neon-blue);">全部</button>
+                    <button class="btn btn-sm" id="filterOPEN" onclick="setOrderFilter('OPEN')" style="font-size: 0.8em; flex: 1; background: transparent; border: 1px solid #555;">未成交</button>
+                    <button class="btn btn-sm" id="filterFILLED" onclick="setOrderFilter('FILLED')" style="font-size: 0.8em; flex: 1; background: transparent; border: 1px solid #555;">已成交</button>
+                    <button class="btn btn-sm" id="filterCANCELED" onclick="setOrderFilter('CANCELED')" style="font-size: 0.8em; flex: 1; background: transparent; border: 1px solid #555;">已取消</button>
+                </div>
 
-            <div class="form-group">
-                <label>價格 (Price)</label>
-                <input type="number" id="tradePrice" placeholder="輸入價格">
+                <div id="orderList" style="display: flex; flex-direction: column; gap: 10px;">
+                    <!-- 訂單卡片 -->
+                </div>
             </div>
-
-            <div class="form-group">
-                <label>數量 (Quantity)</label>
-                <input type="number" id="tradeQuantity" placeholder="輸入數量">
-            </div>
-
-            <button class="btn" onclick="submitOrder()">下單</button>
         </div>
 
-        <!-- 中間：訂單牆 (Order Book) -->
-        <div style="flex: 1; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 12px; height: 100%; min-height: 400px;">
-            <div style="text-align: center; margin-bottom: 10px; font-weight: bold;">訂單牆</div>
-            
-            <!-- Asks (賣單) - 紅色 -->
-            <div id="orderBookAsks" style="display: flex; flex-direction: column-reverse; gap: 2px; min-height: 150px; justify-content: flex-end;">
-                <!-- JS Insert -->
-            </div>
-
-            <div style="margin: 10px 0; border-top: 1px dashed #555;"></div>
-
-            <!-- Bids (買單) - 綠色 -->
-            <div id="orderBookBids" style="display: flex; flex-direction: column; gap: 2px;">
-                <!-- JS Insert -->
-            </div>
-        </div>
-
-        <!-- 右側：訂單列表 -->
-        <div style="flex: 1; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 12px; height: 100%; overflow-y: auto;">
+        <!-- Middle Row: Positions (Contract Only) -->
+        <div id="positionSection" style="width: 100%; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 12px; margin-top: 20px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <h3 style="margin: 0; font-size: 1.1em;">我的委託</h3>
-                <button class="btn btn-sm" onclick="fetchMyOrders()" style="width: auto;">↻</button>
+                <h3 style="margin: 0; font-size: 1.1em; color: var(--neon-purple);">當前持倉 (Positions)</h3>
+                <button class="btn btn-sm" onclick="fetchPositions()" style="width: auto;">↻</button>
             </div>
-            
-            <!-- 篩選分頁按鈕 -->
-            <div class="btn-group" style="margin-bottom: 15px; gap: 5px;">
-                <button class="btn btn-sm" id="filterALL" onclick="setOrderFilter('ALL')" style="font-size: 0.8em; flex: 1; background: var(--neon-blue); color: black; border: 1px solid var(--neon-blue);">全部</button>
-                <button class="btn btn-sm" id="filterOPEN" onclick="setOrderFilter('OPEN')" style="font-size: 0.8em; flex: 1; background: transparent; border: 1px solid #555;">未成交</button>
-                <button class="btn btn-sm" id="filterFILLED" onclick="setOrderFilter('FILLED')" style="font-size: 0.8em; flex: 1; background: transparent; border: 1px solid #555;">已成交</button>
-                <button class="btn btn-sm" id="filterCANCELED" onclick="setOrderFilter('CANCELED')" style="font-size: 0.8em; flex: 1; background: transparent; border: 1px solid #555;">已取消</button>
+            <div id="positionList" style="display: flex; flex-direction: column; gap: 10px;">
+                <!-- JS Insert -->
             </div>
+        </div>
 
-            <div id="orderList" style="display: flex; flex-direction: column; gap: 10px;">
-                <!-- 訂單卡片 -->
+        <!-- Bottom Row: History Section (Dynamic Tabs) -->
+        <div id="historySection" style="width: 100%; margin-top: 20px;">
+             <h3 style="text-align: left; margin-bottom: 10px; border-bottom: 1px solid #555; padding-bottom: 5px;">歷史紀錄</h3>
+             <div class="btn-group" style="margin-bottom: 15px;">
+                 <button class="btn btn-sm" id="tabHistoryFunds" onclick="switchHistoryTab('FUNDS')" style="background: var(--neon-blue); color: black;">資金流水</button>
+                 <button class="btn btn-sm" id="tabHistoryTrades" onclick="switchHistoryTab('TRADES')">成交紀錄</button>
+                 <!--
+                 <button class="btn btn-sm" id="tabHistoryPnL" onclick="switchHistoryTab('PNL')">盈虧紀錄</button>
+                 -->
+            </div>
+            <div id="historyContent" style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 12px; min-height: 200px; max-height: 400px; overflow-y: auto;">
+                 <!-- JS Insert -->
             </div>
         </div>
 
     </div>
 
-    <!-- 7. 功能分頁：交易紀錄 -->
-    <div class="container hidden" id="historyPanel">
-        <div class="header-row">
-            <button class="btn-back" onclick="showDashboard()">← 返回</button>
-            <h2>交易紀錄</h2>
-        </div>
-        <div style="text-align: center; padding: 50px 0; color: #aaa;">
-            <p>歷史數據檢索中...</p>
-            <p>(Coming Soon)</p>
-        </div>
-    </div>
+    <!-- Removed separate HistoryPanel -->
 
-    <script src="script.js?v=10"></script>
+    <script src="script.js?v=11"></script>
 </body>
 </html>

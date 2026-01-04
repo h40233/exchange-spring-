@@ -40,7 +40,18 @@ public class Trade {
     @Column(name = "fee_amount", precision = 36, scale = 18)
     private BigDecimal feeAmount;
 
+    @Column(name = "trade_type", length = 10, columnDefinition = "enum('spot','contract') COLLATE utf8mb3_bin")
+    private com.exchange.exchange.enums.TradeType tradeType;
+
     public Trade() {
+    }
+
+    public com.exchange.exchange.enums.TradeType getTradeType() {
+        return tradeType;
+    }
+
+    public void setTradeType(com.exchange.exchange.enums.TradeType tradeType) {
+        this.tradeType = tradeType;
     }
 
     public Integer getTradeId() {

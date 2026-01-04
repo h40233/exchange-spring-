@@ -84,4 +84,14 @@ public class WalletController {
         walletService.resetWallets(memberId);
         return ResponseEntity.ok().build();
     }
+
+    // 5. 取得資金流水
+    @GetMapping("/transactions")
+    public ResponseEntity<?> getTransactions(HttpSession session) {
+        Integer memberId = getMemberId(session);
+        if (memberId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+
+        List<com.exchange.exchange.entity.WalletTransaction> list = walletService.getTransactions(memberId);
+        return ResponseEntity.ok(list);
+    }
 }

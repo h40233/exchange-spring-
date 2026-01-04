@@ -20,9 +20,17 @@ public class WalletService {
     @Autowired
     private CoinRepository coinRepository;
 
+    @Autowired
+    private com.exchange.exchange.repository.WalletTransactionRepository transactionRepository;
+
     // 取得某會員所有錢包
     public List<Wallet> getWallets(Integer memberId) {
         return walletRepository.findByMemberId(memberId);
+    }
+
+    // 取得資金流水
+    public List<com.exchange.exchange.entity.WalletTransaction> getTransactions(Integer memberId) {
+        return transactionRepository.findByMemberIdOrderByCreatedAtDesc(memberId);
     }
 
     // 取得單一錢包 (若不存在則創建空錢包)
@@ -55,7 +63,65 @@ public class WalletService {
         wallet.setBalance(wallet.getBalance().add(amount));
         wallet.setAvailable(wallet.getAvailable().add(amount));
         
+        // Log transaction
+        com.exchange.exchange.entity.WalletTransaction tx = new com.exchange.exchange.entity.WalletTransaction(
+            memberId, cleanCoinId, "DEPOSIT", amount
+        );
+        transactionRepository.save(tx);
+
         return walletRepository.save(wallet);
+    }
+
+    // 結算盈虧 (可正可負)
+    @Transactional
+    public void realizePnL(Integer memberId, String coinId, BigDecimal pnlAmount) {
+        if (pnlAmount.compareTo(BigDecimal.ZERO) == 0) return;
+
+        Wallet wallet = getWallet(memberId, coinId);
+        
+        // Update Balance & Available
+        wallet.setBalance(wallet.getBalance().add(pnlAmount));
+        wallet.setAvailable(wallet.getAvailable().add(pnlAmount));
+        
+        walletRepository.save(wallet);
+
+        // Log Transaction
+        com.exchange.exchange.entity.WalletTransaction tx = new com.exchange.exchange.entity.WalletTransaction(
+            memberId, coinId, "REALIZED_PNL", pnlAmount
+        );
+        transactionRepository.save(tx);
+    }
+
+    // Deduct Frozen Funds (Spent)
+    @Transactional
+    public void deductFrozen(Integer memberId, String coinId, BigDecimal amount, String type) {
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) return;
+        
+        Wallet wallet = getWallet(memberId, coinId);
+        // Balance decreases, Available stays same (already deducted on freeze)
+        wallet.setBalance(wallet.getBalance().subtract(amount));
+        
+        walletRepository.save(wallet);
+        
+        transactionRepository.save(new com.exchange.exchange.entity.WalletTransaction(
+            memberId, coinId, type, amount.negate()
+        ));
+    }
+
+    // Add Balance (Proceeds)
+    @Transactional
+    public void addBalance(Integer memberId, String coinId, BigDecimal amount, String type) {
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) return;
+
+        Wallet wallet = getWallet(memberId, coinId);
+        wallet.setBalance(wallet.getBalance().add(amount));
+        wallet.setAvailable(wallet.getAvailable().add(amount));
+
+        walletRepository.save(wallet);
+
+        transactionRepository.save(new com.exchange.exchange.entity.WalletTransaction(
+            memberId, coinId, type, amount
+        ));
     }
 
     // 重置所有錢包
@@ -63,6 +129,15 @@ public class WalletService {
     public void resetWallets(Integer memberId) {
         List<Wallet> wallets = walletRepository.findByMemberId(memberId);
         for (Wallet wallet : wallets) {
+            BigDecimal oldBalance = wallet.getBalance();
+            if (oldBalance.compareTo(BigDecimal.ZERO) > 0) {
+                // Log RESET (Withdraw all)
+                 com.exchange.exchange.entity.WalletTransaction tx = new com.exchange.exchange.entity.WalletTransaction(
+                    memberId, wallet.getCoinId(), "WITHDRAW (RESET)", oldBalance.negate()
+                );
+                transactionRepository.save(tx);
+            }
+            
             wallet.setBalance(BigDecimal.ZERO);
             wallet.setAvailable(BigDecimal.ZERO);
             walletRepository.save(wallet);

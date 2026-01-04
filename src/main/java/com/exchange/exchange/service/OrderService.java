@@ -34,12 +34,12 @@ public class OrderService {
     @Autowired
     private MatchingService matchingService;
 
-    public OrderBookDTO getOrderBook(String symbolId) {
+    public OrderBookDTO getOrderBook(String symbolId, com.exchange.exchange.enums.TradeType tradeType) {
         List<OrderStatus> activeStatuses = Arrays.asList(OrderStatus.NEW, OrderStatus.PARTIAL_FILLED);
         PageRequest limit = PageRequest.of(0, 10);
 
-        List<OrderBookDTO.Entry> bids = orderRepository.findOrderBookBids(symbolId, OrderSide.BUY, activeStatuses, limit);
-        List<OrderBookDTO.Entry> asks = orderRepository.findOrderBookAsks(symbolId, OrderSide.SELL, activeStatuses, limit);
+        List<OrderBookDTO.Entry> bids = orderRepository.findOrderBookBids(symbolId, OrderSide.BUY, tradeType, activeStatuses, limit);
+        List<OrderBookDTO.Entry> asks = orderRepository.findOrderBookAsks(symbolId, OrderSide.SELL, tradeType, activeStatuses, limit);
 
         return new OrderBookDTO(bids, asks);
     }
@@ -60,20 +60,30 @@ public class OrderService {
                 .orElseThrow(() -> new IllegalArgumentException("Symbol not found: " + request.getSymbolId()));
 
         // 3. Calculate Required Funds & Freeze
-        // Futures/Contract Mode: Always use Quote Coin (e.g. USDT) as margin.
-        // Both BUY (Long) and SELL (Short) require USDT margin.
-        String currencyToFreeze = symbol.getQuoteCoinId(); // e.g., USDT
+        com.exchange.exchange.enums.TradeType tradeType = request.getTradeType();
+        if (tradeType == null) {
+            tradeType = com.exchange.exchange.enums.TradeType.SPOT; // Default to SPOT for demo
+        }
+
+        String currencyToFreeze;
         BigDecimal amountToFreeze;
 
-        if (request.getType() == OrderType.MARKET) {
-             throw new UnsupportedOperationException("Market orders not yet fully supported for funds freezing");
+        if (tradeType == com.exchange.exchange.enums.TradeType.SPOT && request.getSide() == OrderSide.SELL) {
+            // Spot Sell: Freeze Base Coin (e.g. BTC)
+            currencyToFreeze = symbol.getBaseCoinId();
+            amountToFreeze = request.getQuantity();
+        } else {
+            // Spot Buy OR Contract (Buy/Sell): Freeze Quote Coin (e.g. USDT)
+            currencyToFreeze = symbol.getQuoteCoinId();
+            
+            if (request.getType() == OrderType.MARKET) {
+                 throw new UnsupportedOperationException("Market orders not yet fully supported for funds freezing");
+            }
+            // Calculate total value: Price * Quantity
+            amountToFreeze = request.getPrice().multiply(request.getQuantity());
         }
-        
-        // Calculate total value: Price * Quantity
-        // Assuming 1x leverage for now.
-        amountToFreeze = request.getPrice().multiply(request.getQuantity());
 
-        // Freeze logic (will throw if insufficient USDT)
+        // Freeze logic (will throw if insufficient funds)
         walletService.freezeFunds(memberId, currencyToFreeze, amountToFreeze);
 
         // 4. Create Order Entity
@@ -82,6 +92,7 @@ public class OrderService {
         order.setSymbolId(request.getSymbolId());
         order.setSide(request.getSide());
         order.setType(request.getType());
+        order.setTradeType(tradeType);
         order.setPrice(request.getPrice());
         order.setQuantity(request.getQuantity());
         order.setFilledQuantity(BigDecimal.ZERO);
@@ -118,18 +129,36 @@ public class OrderService {
         // Calculate refund amount
         // Limit Order: Refund (Price * Remaining Quantity)
         BigDecimal remainingQty = order.getQuantity().subtract(order.getFilledQuantity());
-        BigDecimal refundAmount = order.getPrice().multiply(remainingQty);
+        
+        // Retrieve Symbol to know Quote/Base Coin
+        Symbol symbol = symbolRepository.findById(order.getSymbolId())
+                 .orElseThrow(() -> new IllegalStateException("Symbol missing for existing order"));
+
+        String currencyToUnfreeze;
+        BigDecimal refundAmount;
+        
+        // Default to CONTRACT if null (legacy support)
+        com.exchange.exchange.enums.TradeType tradeType = order.getTradeType();
+        if (tradeType == null) {
+            tradeType = com.exchange.exchange.enums.TradeType.CONTRACT;
+        }
+
+        if (tradeType == com.exchange.exchange.enums.TradeType.SPOT && order.getSide() == OrderSide.SELL) {
+             // Spot Sell: Refund Base Coin (e.g. BTC)
+             currencyToUnfreeze = symbol.getBaseCoinId();
+             refundAmount = remainingQty;
+        } else {
+             // Spot Buy OR Contract: Refund Quote Coin (e.g. USDT)
+             currencyToUnfreeze = symbol.getQuoteCoinId();
+             refundAmount = order.getPrice().multiply(remainingQty);
+        }
 
         // Update status
         order.setStatus(OrderStatus.CANCELED);
         order.setUpdatedAt(LocalDateTime.now());
         
-        // Retrieve Symbol to know Quote Coin (USDT)
-        Symbol symbol = symbolRepository.findById(order.getSymbolId())
-                 .orElseThrow(() -> new IllegalStateException("Symbol missing for existing order"));
-        
         // Unfreeze
-        walletService.unfreezeFunds(memberId, symbol.getQuoteCoinId(), refundAmount);
+        walletService.unfreezeFunds(memberId, currencyToUnfreeze, refundAmount);
 
         return orderRepository.save(order);
     }

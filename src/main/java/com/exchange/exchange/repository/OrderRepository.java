@@ -18,30 +18,32 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
 
     // Find SELL orders that match a BUY order (SellPrice <= BuyLimitPrice)
     @Query("SELECT o FROM Order o WHERE o.symbolId = :symbolId AND o.side = :side " +
+           "AND o.tradeType = :tradeType " +
            "AND o.status IN :statuses " +
            "AND o.price <= :priceLimit " +
            "ORDER BY o.price ASC, o.createdAt ASC")
-    List<Order> findMatchingSellOrders(String symbolId, OrderSide side, List<OrderStatus> statuses, BigDecimal priceLimit);
+    List<Order> findMatchingSellOrders(String symbolId, OrderSide side, com.exchange.exchange.enums.TradeType tradeType, List<OrderStatus> statuses, BigDecimal priceLimit);
 
     // Find BUY orders that match a SELL order (BuyPrice >= SellLimitPrice)
     @Query("SELECT o FROM Order o WHERE o.symbolId = :symbolId AND o.side = :side " +
+           "AND o.tradeType = :tradeType " +
            "AND o.status IN :statuses " +
            "AND o.price >= :priceLimit " +
            "ORDER BY o.price DESC, o.createdAt ASC")
-    List<Order> findMatchingBuyOrders(String symbolId, OrderSide side, List<OrderStatus> statuses, BigDecimal priceLimit);
+    List<Order> findMatchingBuyOrders(String symbolId, OrderSide side, com.exchange.exchange.enums.TradeType tradeType, List<OrderStatus> statuses, BigDecimal priceLimit);
 
     // Order Book Queries
     @Query("SELECT new com.exchange.exchange.dto.OrderBookDTO$Entry(o.price, SUM(o.quantity - o.filledQuantity)) " +
            "FROM Order o " +
-           "WHERE o.symbolId = :symbolId AND o.side = :side AND o.status IN :statuses " +
+           "WHERE o.symbolId = :symbolId AND o.side = :side AND o.tradeType = :tradeType AND o.status IN :statuses " +
            "GROUP BY o.price " +
            "ORDER BY o.price DESC")
-    List<OrderBookDTO.Entry> findOrderBookBids(String symbolId, OrderSide side, List<OrderStatus> statuses, Pageable pageable);
+    List<OrderBookDTO.Entry> findOrderBookBids(String symbolId, OrderSide side, com.exchange.exchange.enums.TradeType tradeType, List<OrderStatus> statuses, Pageable pageable);
 
     @Query("SELECT new com.exchange.exchange.dto.OrderBookDTO$Entry(o.price, SUM(o.quantity - o.filledQuantity)) " +
            "FROM Order o " +
-           "WHERE o.symbolId = :symbolId AND o.side = :side AND o.status IN :statuses " +
+           "WHERE o.symbolId = :symbolId AND o.side = :side AND o.tradeType = :tradeType AND o.status IN :statuses " +
            "GROUP BY o.price " +
            "ORDER BY o.price ASC")
-    List<OrderBookDTO.Entry> findOrderBookAsks(String symbolId, OrderSide side, List<OrderStatus> statuses, Pageable pageable);
+    List<OrderBookDTO.Entry> findOrderBookAsks(String symbolId, OrderSide side, com.exchange.exchange.enums.TradeType tradeType, List<OrderStatus> statuses, Pageable pageable);
 }
