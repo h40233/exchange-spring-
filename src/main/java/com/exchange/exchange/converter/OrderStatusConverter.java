@@ -4,22 +4,20 @@ import com.exchange.exchange.enums.OrderStatus;
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
 
+// ====== 檔案總結 ======
+// OrderStatusConverter: NEW -> "new"
 @Converter(autoApply = true)
 public class OrderStatusConverter implements AttributeConverter<OrderStatus, String> {
 
     @Override
     public String convertToDatabaseColumn(OrderStatus attribute) {
-        if (attribute == null) {
-            return null;
-        }
+        if (attribute == null) return null;
         return attribute.name().toLowerCase();
     }
 
     @Override
     public OrderStatus convertToEntityAttribute(String dbData) {
-        if (dbData == null) {
-            return null;
-        }
+        if (dbData == null) return null;
         return OrderStatus.valueOf(dbData.toUpperCase());
     }
 }

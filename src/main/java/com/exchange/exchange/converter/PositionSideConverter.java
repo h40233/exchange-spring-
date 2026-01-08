@@ -4,22 +4,20 @@ import com.exchange.exchange.enums.PositionSide;
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
 
+// ====== 檔案總結 ======
+// PositionSideConverter: LONG -> "long"
 @Converter(autoApply = true)
 public class PositionSideConverter implements AttributeConverter<PositionSide, String> {
 
     @Override
     public String convertToDatabaseColumn(PositionSide attribute) {
-        if (attribute == null) {
-            return null;
-        }
+        if (attribute == null) return null;
         return attribute.name().toLowerCase();
     }
 
     @Override
     public PositionSide convertToEntityAttribute(String dbData) {
-        if (dbData == null) {
-            return null;
-        }
+        if (dbData == null) return null;
         return PositionSide.valueOf(dbData.toUpperCase());
     }
 }
