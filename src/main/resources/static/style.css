@@ -1,43 +1,66 @@
 :root {
-    /* CSS 變數定義 (Design Tokens) 
-       方便統一管理顏色與特效參數
-    */
+    /* CSS 變數定義 (Design Tokens) */
     --space-black: #0b0d17;
     --star-white: #ffffff;
     --neon-blue: #00f3ff;   /* 買入/正面訊息 */
     --neon-purple: #bc13fe; /* 強調/標題 */
-    --glass-bg: rgba(255, 255, 255, 0.05); /* 玻璃背景色 */
+    --glass-bg: rgba(20, 20, 30, 0.6); /* 加深背景色，提高對比度 */
     --glass-border: rgba(255, 255, 255, 0.1); /* 玻璃邊框色 */
+    --input-bg: rgba(0, 0, 0, 0.5); /* 輸入框背景 */
 }
 
 body {
     margin: 0;
     padding: 0;
     background-color: var(--space-black);
-    /* 雙重放射漸層背景 */
     background-image: 
         radial-gradient(circle at 10% 20%, rgba(188, 19, 254, 0.2) 0%, transparent 20%),
         radial-gradient(circle at 90% 80%, rgba(0, 243, 255, 0.15) 0%, transparent 20%);
     color: var(--star-white);
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    /* Flexbox 置中佈局 */
     display: flex;
     justify-content: center;
-    align-items: center;
+    align-items: flex-start; /* 改為靠上對齊，避免長頁面切版 */
     min-height: 100vh;
-    overflow-y: auto; /* 內容過長時允許捲動 */
+    overflow-y: auto;
+    padding-top: 50px;
+    box-sizing: border-box;
 }
 
-/* 星星背景動畫 (Parallax Stars)
-   使用 CSS 偽元素 ::after 與 box-shadow 技巧模擬星星
-*/
+/* 確保所有元素預設 dark mode */
+* {
+    box-sizing: border-box;
+}
+
+input, select, button, textarea {
+    font-family: inherit;
+    color: var(--star-white);
+}
+
+/* 輸入框統一樣式 */
+input[type="text"], input[type="password"], input[type="number"], select {
+    background: var(--input-bg);
+    border: 1px solid var(--glass-border);
+    color: var(--star-white);
+    padding: 10px;
+    border-radius: 8px;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.3s;
+}
+
+input:focus, select:focus {
+    border-color: var(--neon-blue);
+}
+
+/* 星星背景動畫 */
 .stars {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    pointer-events: none; /* 讓點擊穿透，不影響互動 */
+    pointer-events: none;
     background: transparent;
     z-index: -1;
 }
@@ -48,7 +71,6 @@ body {
     left: -50%;
     width: 200%;
     height: 200%;
-    /* 使用多重放射漸層繪製星星點 */
     background-image: 
         radial-gradient(2px 2px at 20px 30px, #fff, rgba(0,0,0,0)),
         radial-gradient(2px 2px at 40px 70px, #fff, rgba(0,0,0,0)),
@@ -56,7 +78,7 @@ body {
         radial-gradient(2px 2px at 90px 40px, #fff, rgba(0,0,0,0)),
         radial-gradient(2px 2px at 130px 80px, #fff, rgba(0,0,0,0));
     background-size: 200px 200px;
-    animation: moveStars 100s linear infinite; /* 緩慢移動動畫 */
+    animation: moveStars 100s linear infinite;
     opacity: 0.3;
 }
 
@@ -65,29 +87,115 @@ body {
     to { transform: translateY(-1000px); }
 }
 
-/* 容器樣式 (Glassmorphism Container)
-   所有面板的基礎樣式
-*/
+/* 容器樣式 */
 .container {
-    width: 400px;
+    width: 100%;
+    max-width: 500px; /* 限制最大寬度，避免過寬 */
     padding: 40px;
     background: var(--glass-bg);
-    backdrop-filter: blur(16px); /* 背景模糊特效 (毛玻璃) */
+    backdrop-filter: blur(16px);
     border: 1px solid var(--glass-border);
     border-radius: 20px;
-    box-shadow: 0 0 30px rgba(0, 243, 255, 0.1); /* 霓虹光暈 */
+    box-shadow: 0 0 30px rgba(0, 243, 255, 0.1);
     position: relative;
     z-index: 10;
     transition: all 0.3s ease;
-    margin: 20px;
+    margin: 0 auto 50px auto; /* 置中並保留底部邊距 */
 }
 
-/* ... (省略部分基礎 Typography 與 Form 樣式，結構類似) ... */
+/* 大型面板 (如交易介面) */
+#tradePanel {
+    max-width: 1200px; /* 交易介面更寬 */
+}
 
-/* 按鈕特效 */
+h1, h2, h3 {
+    margin-top: 0;
+    color: var(--star-white);
+    text-shadow: 0 0 10px rgba(255,255,255,0.3);
+}
+
+h1 { font-size: 2.5em; text-align: center; margin-bottom: 30px; letter-spacing: 2px; }
+h2 { font-size: 1.8em; text-align: center; margin-bottom: 25px; color: var(--neon-purple); }
+
+.form-group {
+    margin-bottom: 20px;
+}
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--neon-blue);
+    font-size: 0.9em;
+    letter-spacing: 1px;
+}
+
+/* 按鈕樣式 */
+.btn {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    background: linear-gradient(90deg, var(--neon-blue), var(--neon-purple));
+    color: #000; /* 深色背景上的文字用黑色比較清晰 */
+    font-weight: bold;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
 .btn:hover {
     transform: scale(1.02);
-    box-shadow: 0 0 20px rgba(188, 19, 254, 0.5); /* 懸停時發光 */
+    box-shadow: 0 0 20px rgba(188, 19, 254, 0.5);
+}
+
+.btn-secondary {
+    background: transparent;
+    border: 1px solid var(--glass-border);
+    color: var(--star-white);
+}
+.btn-secondary:hover {
+    background: rgba(255,255,255,0.1);
+    border-color: var(--neon-blue);
+    box-shadow: none;
+}
+
+.btn-sm {
+    padding: 5px 10px;
+    font-size: 0.8em;
+    width: auto;
+}
+
+.btn-back {
+    background: none;
+    border: none;
+    color: #aaa;
+    font-size: 1.2em;
+    cursor: pointer;
+    padding: 0;
+    margin-right: 15px;
+}
+.btn-back:hover { color: white; }
+
+.toggle-text {
+    text-align: center;
+    margin-top: 15px;
+    font-size: 0.9em;
+    color: #aaa;
+}
+.toggle-text span {
+    color: var(--neon-blue);
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+.header-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 20px;
+}
+.header-row h2 {
+    margin: 0;
+    text-align: left;
 }
 
 /* 隱藏輔助類別 */
@@ -98,7 +206,7 @@ body {
 /* 導航網格 */
 .nav-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr; /* 兩欄均分 */
+    grid-template-columns: 1fr 1fr;
     gap: 15px;
     margin-top: 20px;
 }
@@ -112,8 +220,23 @@ body {
     cursor: pointer;
     transition: all 0.3s ease;
 }
+.nav-item:hover {
+    background: rgba(255,255,255,0.1);
+    border-color: var(--neon-blue);
+    transform: translateY(-2px);
+}
+.nav-item h3 {
+    margin: 0 0 10px 0;
+    color: var(--neon-blue);
+    font-size: 1.2em;
+}
+.nav-item p {
+    margin: 0;
+    font-size: 0.9em;
+    color: #ccc;
+}
 
-/* 自定義下拉選單樣式 (用於交易對搜尋) */
+/* 下拉選單 */
 .dropdown-list {
     position: absolute;
     top: 100%;
@@ -121,15 +244,90 @@ body {
     width: 100%;
     max-height: 250px;
     overflow-y: auto;
-    background: #000000;
-    border: 2px solid var(--neon-blue);
+    background: #1a1a2e; /* 深色背景 */
+    border: 1px solid var(--neon-blue);
     border-radius: 8px;
     z-index: 9999;
     box-shadow: 0 0 15px rgba(0, 243, 255, 0.2);
     margin-top: 5px;
 }
+.dropdown-item {
+    padding: 10px;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.dropdown-item:hover {
+    background: rgba(0, 243, 255, 0.1);
+}
 
-/* [備註]
-   CSS 使用了現代的 Flexbox 與 Grid 佈局，並透過 CSS Variables 實現主題化。
-   backdrop-filter 是實現玻璃擬態的關鍵屬性，但在舊版瀏覽器可能不支援。
-*/
+/* 錢包卡片 */
+.wallet-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 15px;
+}
+.wallet-card {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    padding: 15px;
+    text-align: center;
+    transition: all 0.3s;
+}
+.wallet-card:hover {
+    border-color: var(--neon-purple);
+    transform: translateY(-2px);
+}
+.coin-title {
+    font-weight: bold;
+    color: var(--neon-blue);
+    margin-bottom: 5px;
+}
+.coin-balance {
+    font-size: 1.2em;
+    margin-bottom: 10px;
+}
+
+/* Modal */
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+}
+.modal-content {
+    background: #151520;
+    padding: 30px;
+    border-radius: 15px;
+    border: 1px solid var(--neon-purple);
+    width: 300px;
+    position: relative;
+    box-shadow: 0 0 30px rgba(188, 19, 254, 0.3);
+}
+.modal-close {
+    position: absolute;
+    top: 10px; right: 15px;
+    font-size: 1.5em;
+    cursor: pointer;
+    color: #aaa;
+}
+.modal-close:hover { color: white; }
+
+/* 卷軸美化 */
+::-webkit-scrollbar {
+    width: 8px;
+}
+::-webkit-scrollbar-track {
+    background: #0b0d17; 
+}
+::-webkit-scrollbar-thumb {
+    background: #333; 
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #555; 
+}

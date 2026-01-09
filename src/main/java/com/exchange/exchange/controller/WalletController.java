@@ -26,6 +26,20 @@ public class WalletController {
     @Autowired
     private WalletService walletService;
 
+    @Autowired
+    private com.exchange.exchange.repository.CoinRepository coinRepository;
+
+    // API：取得系統支援的所有幣種
+    // GET /api/wallets/coins
+    @GetMapping("/coins")
+    public ResponseEntity<List<String>> getAllCoins() {
+        // 從資料庫撈取所有幣種並只回傳 ID
+        List<String> coins = coinRepository.findAll().stream()
+                .map(com.exchange.exchange.entity.Coin::getCoinId)
+                .toList();
+        return ResponseEntity.ok(coins);
+    }
+
     // 內部 DTO 類別：用於接收儲值請求的 JSON Body [註1]
     public static class DepositRequest {
         public String coinId;

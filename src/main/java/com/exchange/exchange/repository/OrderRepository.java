@@ -39,8 +39,9 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
            "AND o.tradeType = :tradeType " +
            "AND o.status IN :statuses " +
            "AND o.price <= :priceLimit " +
+           "AND o.memberId <> :takerMemberId " +
            "ORDER BY o.price ASC, o.createdAt ASC")
-    List<Order> findMatchingSellOrders(String symbolId, OrderSide side, com.exchange.exchange.enums.TradeType tradeType, List<OrderStatus> statuses, BigDecimal priceLimit);
+    List<Order> findMatchingSellOrders(String symbolId, OrderSide side, com.exchange.exchange.enums.TradeType tradeType, List<OrderStatus> statuses, BigDecimal priceLimit, Integer takerMemberId);
 
     // 尋找「買單」來匹配使用者的「賣單」
     // 條件：
@@ -53,8 +54,9 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
            "AND o.tradeType = :tradeType " +
            "AND o.status IN :statuses " +
            "AND o.price >= :priceLimit " +
+           "AND o.memberId <> :takerMemberId " +
            "ORDER BY o.price DESC, o.createdAt ASC")
-    List<Order> findMatchingBuyOrders(String symbolId, OrderSide side, com.exchange.exchange.enums.TradeType tradeType, List<OrderStatus> statuses, BigDecimal priceLimit);
+    List<Order> findMatchingBuyOrders(String symbolId, OrderSide side, com.exchange.exchange.enums.TradeType tradeType, List<OrderStatus> statuses, BigDecimal priceLimit, Integer takerMemberId);
 
     // === 訂單簿聚合邏輯 (Order Book Aggregation) ===
 

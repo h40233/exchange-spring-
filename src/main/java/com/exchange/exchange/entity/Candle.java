@@ -24,7 +24,6 @@ public class Candle {
 
     // 主鍵 2: 時間週期 (1分, 1小時等)
     @Id
-    @Enumerated(EnumType.STRING)
     @Column(length = 10)
     private Timeframe timeframe;
 

@@ -70,6 +70,11 @@ public class OrderService {
     // 使用 @Transactional 確保下單流程 (驗證、凍結、存檔) 的一致性
     @Transactional
     public Order createOrder(Integer memberId, OrderRequest request) {
+        // TEMPORARY: Disable Contract Trading
+        if (request.getTradeType() == com.exchange.exchange.enums.TradeType.CONTRACT) {
+            throw new UnsupportedOperationException("Contract trading is temporarily disabled.");
+        }
+
         // 1. 基礎參數驗證 (Basic Validation)
         // 檢查數量必須大於 0
         if (request.getQuantity().compareTo(BigDecimal.ZERO) <= 0) {
@@ -87,7 +92,6 @@ public class OrderService {
                 .orElseThrow(() -> new IllegalArgumentException("Symbol not found: " + request.getSymbolId()));
 
         // 3. 計算所需資金並凍結 (Calculate Required Funds & Freeze)
-        // 獲取交易類型，若未傳入則預設為現貨 (SPOT)
         com.exchange.exchange.enums.TradeType tradeType = request.getTradeType();
         if (tradeType == null) {
             tradeType = com.exchange.exchange.enums.TradeType.SPOT; // Default to SPOT for demo
@@ -96,24 +100,50 @@ public class OrderService {
         String currencyToFreeze;
         BigDecimal amountToFreeze;
 
-        // 判斷凍結邏輯 (現貨交易)
-        if (tradeType == com.exchange.exchange.enums.TradeType.SPOT && request.getSide() == OrderSide.SELL) {
-            // 情境：現貨賣出 (Spot Sell) -> 例如賣 BTC 換 USDT
-            // 需凍結：基礎幣 (Base Coin，如 BTC)
-            // 凍結金額：賣出數量 (Quantity)
-            currencyToFreeze = symbol.getBaseCoinId();
-            amountToFreeze = request.getQuantity();
-        } else {
-            // 情境：現貨買入 (Spot Buy) 或 合約交易 (Contract)
-            // 需凍結：報價幣 (Quote Coin，如 USDT)
-            currencyToFreeze = symbol.getQuoteCoinId();
-            
-            // 目前系統尚未完全支援市價單的預凍結邏輯 (因為市價單價格未定)
-            if (request.getType() == OrderType.MARKET) {
-                 throw new UnsupportedOperationException("Market orders not yet fully supported for funds freezing");
+        if (request.getType() == OrderType.MARKET) {
+            // --- 市價單邏輯 (Market Order Logic) ---
+            if (request.getSide() == OrderSide.SELL) {
+                // 市價賣出：凍結基礎幣 (如 1 BTC)
+                currencyToFreeze = symbol.getBaseCoinId();
+                amountToFreeze = request.getQuantity();
+                // 設定價格為 0 (市價賣單願意接受任何價格，但撮合時會優先匹配最高買單)
+                request.setPrice(BigDecimal.ZERO);
+            } else {
+                // 市價買入：凍結報價幣 (如 USDT)
+                // 需估算成本：獲取當前最佳賣價 (Best Ask) * 數量 * 1.05 (5% 緩衝)
+                currencyToFreeze = symbol.getQuoteCoinId();
+                
+                // 查詢最佳賣價 (Best Ask)
+                PageRequest top1 = PageRequest.of(0, 1);
+                List<OrderBookDTO.Entry> asks = orderRepository.findOrderBookAsks(
+                        symbol.getSymbolId(), OrderSide.SELL, tradeType, 
+                        Arrays.asList(OrderStatus.NEW, OrderStatus.PARTIAL_FILLED), top1);
+                
+                BigDecimal estimatedPrice;
+                if (asks.isEmpty()) {
+                    // 若無賣單，無法市價買入 (或設定一個參考價)
+                    throw new IllegalArgumentException("No asks available for market buy");
+                } else {
+                    estimatedPrice = asks.get(0).getPrice();
+                }
+                
+                // 凍結金額 = 預估價格 * 數量 * 1.05
+                amountToFreeze = estimatedPrice.multiply(request.getQuantity())
+                                               .multiply(new BigDecimal("1.05"));
+                
+                // 設定價格為極大值 (市價買單願意接受任何價格，撮合時優先匹配最低賣單)
+                // 使用 long max value 確保大於任何限價單
+                request.setPrice(new BigDecimal("1000000000")); 
             }
-            // 限價單凍結金額 = 價格 * 數量
-            amountToFreeze = request.getPrice().multiply(request.getQuantity());
+        } else {
+            // --- 限價單邏輯 (Limit Order Logic) ---
+            if (tradeType == com.exchange.exchange.enums.TradeType.SPOT && request.getSide() == OrderSide.SELL) {
+                currencyToFreeze = symbol.getBaseCoinId();
+                amountToFreeze = request.getQuantity();
+            } else {
+                currencyToFreeze = symbol.getQuoteCoinId();
+                amountToFreeze = request.getPrice().multiply(request.getQuantity());
+            }
         }
 
         // 執行資金凍結邏輯 (若餘額不足，WalletService 會拋出異常中斷交易)

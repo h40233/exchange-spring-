@@ -16,7 +16,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 // ====== 檔案總結 ======
 // SymbolService 負責管理交易所的「幣種」與「交易對」。
