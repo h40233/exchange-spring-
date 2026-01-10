@@ -1,9 +1,9 @@
 package com.exchange.exchange.controller;
 
-// 引入實體與服務
+// 引入實體與服務層
 import com.exchange.exchange.entity.Member;
 import com.exchange.exchange.service.MemberService;
-// 引入 Spring Web 與 Session
+// 引入 Spring Web MVC 與 Session 管理工具
 import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -13,84 +13,94 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Optional;
 
 // ====== 檔案總結 ======
-// MemberController 提供會員認證與資料管理的 API。
+// MemberController 提供會員認證與管理的 RESTful API。
 // 核心功能：
-// 1. 註冊 (Register) 與 登入 (Login)。
-// 2. 登出 (Logout - Invalidate Session)。
-// 3. 查詢與更新個人資料 (Me)。
+// 1. 身份認證：註冊 (POST /register)、登入 (POST /login)、登出 (POST /logout)。
+// 2. 個人資料管理：查詢 (GET /me)、更新 (PUT /me)。
+// 狀態管理方式：使用 HttpSession (Stateful)。
 @RestController
 @RequestMapping("/api/members")
 public class MemberController {
 
+    // 注入 MemberService 處理業務邏輯
     @Autowired
     private MemberService memberService;
 
     // API：註冊新會員
-    // POST /api/members/register
+    // 路徑：POST /api/members/register
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody Member member) {
         try {
             // 呼叫 Service 進行註冊
-            // 注意：這裡直接接收 Member Entity 作為參數，包含了 password 欄位
+            // 注意：這裡直接使用 Entity 接收參數，前端需傳送符合 Member 結構的 JSON
             Member newMember = memberService.register(member.getAccount(), member.getPassword(), member.getName(), member.getNumber());
+            // 註冊成功，回傳新建立的會員資料 (HTTP 200)
             return ResponseEntity.ok(newMember);
         } catch (RuntimeException e) {
-            // 帳號重複等錯誤 -> 回傳 400 Bad Request
+            // 捕捉業務異常 (如帳號重複) -> 回傳 HTTP 400 Bad Request
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
 
     // API：會員登入
-    // POST /api/members/login
+    // 路徑：POST /api/members/login
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody Member member, HttpSession session) {
         // 呼叫 Service 驗證帳號密碼
         Member loggedInMember = memberService.login(member.getAccount(), member.getPassword());
         
+        // 邏輯判斷：若 Service 回傳非 null 物件，表示驗證成功
         if (loggedInMember != null) {
-            // 登入成功：將 memberId 寫入 Session，建立登入狀態 [註1]
+            // 狀態管理：將 memberId 寫入 Session，標記該使用者已登入 [註1]
             session.setAttribute("memberId", loggedInMember.getMemberId());
+            // 回傳會員資料
             return ResponseEntity.ok(loggedInMember);
         }
-        // 登入失敗：回傳 401 Unauthorized
+        // 驗證失敗：回傳 HTTP 401 Unauthorized
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid credentials");
     }
 
     // API：會員登出
-    // POST /api/members/logout
+    // 路徑：POST /api/members/logout
     @PostMapping("/logout")
     public ResponseEntity<?> logout(HttpSession session) {
-        // 銷毀 Session，清除所有屬性
+        // 銷毀 Session：清除伺服器端儲存的該使用者所有狀態
         session.invalidate();
         return ResponseEntity.ok("Logged out successfully");
     }
 
     // API：獲取我的個人資料
-    // GET /api/members/me
+    // 路徑：GET /api/members/me
     @GetMapping("/me")
     public ResponseEntity<?> getMyProfile(HttpSession session) {
+        // 從 Session 中提取 memberId
         Integer memberId = (Integer) session.getAttribute("memberId");
+        
+        // 權限驗證：若 Session 中無 ID，表示未登入或 Session 已過期
         if (memberId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Please login first");
         }
 
+        // 查詢會員資料
         Optional<Member> member = memberService.getMemberById(memberId);
-        // 若找不到會員 (可能被刪除) 則回傳 404，否則回傳資料
+        
+        // 若找不到會員 (可能被管理員刪除)，回傳 404；否則回傳資料
         return member.map(ResponseEntity::ok)
                      .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     // API：更新我的個人資料
-    // PUT /api/members/me
+    // 路徑：PUT /api/members/me
     @PutMapping("/me")
     public ResponseEntity<?> updateMyProfile(@RequestBody Member member, HttpSession session) {
+        // 從 Session 獲取當前登入者 ID
         Integer memberId = (Integer) session.getAttribute("memberId");
         if (memberId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Please login first");
         }
 
-        // 使用 Service 更新資料，包含選擇性的密碼變更邏輯
-        // 前端若傳送 null 或空字串，Service 層會忽略該欄位
+        // 呼叫 Service 執行更新
+        // 前端只需傳送欲修改的欄位，未傳送的欄位 (null) 將被忽略
         Member updatedMember = memberService.updateMember(
                 memberId,
                 member.getName(),
@@ -107,14 +117,13 @@ public class MemberController {
 
 // ====== 備註區 ======
 /*
-[註1] Session 管理 (Session Management):
-      目前使用 Servlet API 的 `HttpSession`。這在單體應用 (Monolith) 中是可行的。
-      但在微服務或前後端分離架構中，建議改用 Token-Based 驗證 (如 JWT) 搭配 Spring Security。
-      這樣可以實現無狀態 (Stateless) 驗證，更容易水平擴展。
+[註1] Session 架構限制 (Session Management):
+      目前使用 Servlet `HttpSession` 進行狀態管理。
+      這在單體應用 (Monolith) 中運作良好，但在分散式系統或前後端分離架構中，Session 擴展性較差。
+      建議改用 Token-Based 驗證 (如 JWT) 搭配 Spring Security，實現無狀態 (Stateless) 認證。
 
-[註2] 資料暴露 (Data Exposure):
-      `register` 與 `login` 成功後直接回傳了 `Member` 物件。
-      `Member` 物件中包含 `password` (即使是加密後的)。
-      雖然使用了 `@JsonProperty(access = Access.WRITE_ONLY)` 來防止序列化輸出密碼 (需檢查 Entity 定義)，
-      但最佳實踐仍是回傳專門的 `MemberResponseDTO`，完全排除敏感欄位。
+[註2] 資料暴露風險 (Data Exposure):
+      `register` 與 `login` 接口直接回傳 `Member` Entity。
+      這會導致後端資料結構 (如 `password` 欄位) 暴露給前端 (即使有 @JsonIgnore 設定，DTO 模式仍較安全)。
+      建議建立專用的 `MemberResponseDTO`，僅包含 `id`, `name`, `account` 等非敏感欄位。
 */

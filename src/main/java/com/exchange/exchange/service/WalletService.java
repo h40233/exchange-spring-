@@ -1,24 +1,23 @@
 package com.exchange.exchange.service;
 
 // 引入實體：錢包、錢包主鍵 (複合鍵)
-import com.exchange.exchange.entity.Wallet;
-import com.exchange.exchange.entity.key.WalletId;
-// 引入資料存取層
-import com.exchange.exchange.repository.CoinRepository;
-import com.exchange.exchange.repository.WalletRepository;
-// 引入 Spring 工具
+import java.math.BigDecimal;
+import java.util.List;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.util.List;
+import com.exchange.exchange.entity.Wallet;
+import com.exchange.exchange.entity.key.WalletId;
+import com.exchange.exchange.repository.CoinRepository;
+import com.exchange.exchange.repository.WalletRepository;
 
 // ====== 檔案總結 ======
 // WalletService 管理使用者的資產狀態。
 // 核心概念：
-// 1. Balance (總餘額)：使用者擁有的資產總量。
-// 2. Available (可用餘額)：總餘額 - 凍結金額 (掛單中)。
+// 1. Balance (總餘額)：使用者擁有的資產總量 (包含凍結中)。
+// 2. Available (可用餘額)：可以自由使用的資產 (總餘額 - 凍結金額)。
 // 所有的資金變動都必須透過此 Service，且應嚴格遵守事務原子性。
 @Service
 public class WalletService {
@@ -68,7 +67,7 @@ public class WalletService {
             throw new IllegalArgumentException("Coin ID cannot be empty");
         }
 
-        // 驗證幣種是否存在於系統配置中 [註1]
+        // 驗證幣種是否存在於系統配置中
         if (!coinRepository.existsById(cleanCoinId)) {
             throw new IllegalArgumentException("Coin not found: " + cleanCoinId);
         }
@@ -180,7 +179,7 @@ public class WalletService {
             throw new IllegalArgumentException("Insufficient available balance for " + coinId);
         }
         
-        // 扣除可用餘額
+        // 扣除可用餘額 (Available decreases, Balance stays same)
         wallet.setAvailable(wallet.getAvailable().subtract(amount));
         walletRepository.save(wallet);
     }
@@ -192,13 +191,14 @@ public class WalletService {
         if (amount.compareTo(BigDecimal.ZERO) <= 0) return;
 
         Wallet wallet = getWallet(memberId, coinId);
+        // 資金回補至可用餘額
         wallet.setAvailable(wallet.getAvailable().add(amount));
         walletRepository.save(wallet);
     }
 
     // 私有方法：建立空錢包
     private Wallet createEmptyWallet(Integer memberId, String coinId) {
-        // 再次檢查幣種是否存在 (雖然調用方可能檢查過，但作為底層方法應再次確保)
+        // 再次檢查幣種是否存在
         if (!coinRepository.existsById(coinId)) {
              throw new IllegalArgumentException("Coin not found: " + coinId);
         }
@@ -214,13 +214,8 @@ public class WalletService {
 
 // ====== 備註區 ======
 /*
-[註1] 併發控制 (Concurrency Control):
-      當高併發請求同時修改同一個錢包時（例如同時快速下單），簡單的 get->set 可能導致「丟失更新」(Lost Update) 問題。
-      改進建議：
-      1. 使用悲觀鎖 (Pessimistic Locking)：在 Repository 使用 @Lock(LockModeType.PESSIMISTIC_WRITE)。
-      2. 使用資料庫層級的原子更新：UPDATE wallets SET balance = balance + :amount WHERE ...
-
-[註2] 負值檢查 (Negative Value Check):
-      目前的實作依賴上層邏輯保證扣款不會導致 Balance 變為負數 (除了 freezeFunds 有檢查 Available)。
-      建議在 Entity 層或資料庫層加上 CHECK 約束 (CHECK balance >= 0)，防止邏輯漏洞導致資產變負。
+[註1] 帳戶邏輯 (Accounting Logic):
+      本系統採用「隱式凍結」邏輯：Frozen = Balance - Available。
+      這意味著在資料庫中並不直接存儲 `frozen` 欄位，而是透過 `balance` (總資產) 與 `available` (可用資產) 的差額來推算。
+      這是一個常見的設計，優點是欄位少，缺點是若 `balance` 與 `available` 更新不一致會導致帳務錯誤。
 */

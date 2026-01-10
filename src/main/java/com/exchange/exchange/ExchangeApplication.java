@@ -1,26 +1,27 @@
 package com.exchange.exchange;
 
 // 引入實體與資料存取層
+import java.util.Arrays;
+import java.util.List;
+
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.Bean;
+import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.exchange.exchange.entity.Coin;
 import com.exchange.exchange.entity.Member;
 import com.exchange.exchange.entity.Symbol;
 import com.exchange.exchange.repository.CoinRepository;
 import com.exchange.exchange.repository.MemberRepository;
 import com.exchange.exchange.repository.SymbolRepository;
-// 引入 Spring Boot 核心元件
-import org.springframework.boot.CommandLineRunner;
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.context.annotation.Bean;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.scheduling.annotation.EnableScheduling;
-
-import java.util.Arrays;
-import java.util.List;
 
 // ====== 檔案總結 ======
-// 這是 Spring Boot 應用程式的啟動入口。
-// 包含 `initData` Bean，用於在系統啟動時自動檢查並建立預設的幣種與交易對資料。
+// ExchangeApplication 是整個 Spring Boot 應用程式的啟動入口。
+// 標註 @EnableScheduling 以啟用定時任務 (用於 MarketMakerService)。
+// 包含 `initData` Bean，用於在系統啟動時自動檢查並建立預設的資料 (種子數據)。
 @SpringBootApplication
 @EnableScheduling
 public class ExchangeApplication {
@@ -29,8 +30,8 @@ public class ExchangeApplication {
         SpringApplication.run(ExchangeApplication.class, args);
     }
 
-    // 定義 CommandLineRunner，應用程式啟動後自動執行
-    // 使用 @Transactional 確保初始化過程具有原子性
+    // 定義 CommandLineRunner，應用程式啟動後自動執行此方法
+    // 使用 @Transactional 確保整個初始化過程具有原子性 (要嘛全成功，要嘛全失敗)
     @Bean
     @Transactional
     public CommandLineRunner initData(CoinRepository coinRepository, SymbolRepository symbolRepository, MemberRepository memberRepository) {
@@ -40,6 +41,7 @@ public class ExchangeApplication {
             
             // 0. 初始化機器人帳號 (Initialize Bot)
             // 假設 ID 1 為機器人，若不存在則建立
+            // 這對應 MarketMakerService 中的 BOT_MEMBER_ID = 1
             if (!memberRepository.existsById(1)) {
                  System.out.println("建立造市機器人帳號...");
                  Member bot = new Member();
@@ -59,7 +61,7 @@ public class ExchangeApplication {
                     Coin coin = new Coin();
                     coin.setCoinId(coinId);
                     coin.setName(coinId + " Token");
-                    coin.setDecimals(8.0f);
+                    coin.setDecimals(8.0f); // 預設精度
                     coinRepository.save(coin);
                 }
             }

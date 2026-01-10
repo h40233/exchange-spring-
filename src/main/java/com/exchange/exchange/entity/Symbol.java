@@ -1,71 +1,68 @@
 package com.exchange.exchange.entity;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 
 // ====== 檔案總結 ======
-// Symbol 實體對應 `symbols` 表。
-// 定義基礎幣 (Base Coin) 與報價幣 (Quote Coin) 的對應關係。
+// Symbol 實體類別對應 `symbols` 表。
+// 定義交易所支援的交易對 (Trading Pair)，例如 BTC/USDT。
+// 關聯兩個幣種：基礎幣 (Base Coin) 與 報價幣 (Quote Coin)。
 @Entity
 @Table(name = "symbols")
 public class Symbol {
 
-    // 交易對 ID (手動指定，如 BTCUSDT)
+    // 交易對 ID (例如 "BTCUSDT")，手動指定
     @Id
     @Column(name = "symbolID", length = 45)
     private String symbolId;
 
-    // 顯示名稱 (如 BTC/USDT)
+    // 前端顯示名稱 (例如 "BTC/USDT")
     @Column(length = 45)
     private String name;
 
-    // 基礎幣 ID (交易標的)
+    // 基礎幣種 ID (被交易的資產，如 BTC)
     @Column(name = "base_coinID", length = 45)
     private String baseCoinId;
 
-    // 報價幣 ID (計價單位)
+    // 報價幣種 ID (計價單位，如 USDT)
     @Column(name = "quote_coinID", length = 45)
     private String quoteCoinId;
 
-    // 無參數建構子
     public Symbol() {
     }
 
-    // 取得交易對 ID
+    // --- Getters & Setters ---
+
     public String getSymbolId() {
         return symbolId;
     }
 
-    // 設定交易對 ID
     public void setSymbolId(String symbolId) {
         this.symbolId = symbolId;
     }
 
-    // 取得顯示名稱
     public String getName() {
         return name;
     }
 
-    // 設定顯示名稱
     public void setName(String name) {
         this.name = name;
     }
 
-    // 取得基礎幣 ID
     public String getBaseCoinId() {
         return baseCoinId;
     }
 
-    // 設定基礎幣 ID
     public void setBaseCoinId(String baseCoinId) {
         this.baseCoinId = baseCoinId;
     }
 
-    // 取得報價幣 ID
     public String getQuoteCoinId() {
         return quoteCoinId;
     }
 
-    // 設定報價幣 ID
     public void setQuoteCoinId(String quoteCoinId) {
         this.quoteCoinId = quoteCoinId;
     }

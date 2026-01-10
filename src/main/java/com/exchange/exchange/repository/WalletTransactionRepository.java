@@ -1,15 +1,16 @@
 package com.exchange.exchange.repository;
 
-// 引入實體與 JPA
-import com.exchange.exchange.entity.WalletTransaction;
-import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import com.exchange.exchange.entity.WalletTransaction;
+
 // ====== 檔案總結 ======
-// WalletTransactionRepository 提供資金流水的查詢功能。
-// 主要用於讓使用者查看自己的資產變動歷史。
+// WalletTransactionRepository 負責對 `wallet_transactions` 表進行查詢。
+// 提供使用者查詢資產變動明細的功能。
 public interface WalletTransactionRepository extends JpaRepository<WalletTransaction, Long> {
     
-    // 查詢某會員的所有流水紀錄，並依照建立時間倒序排列 (最新的在最上面)
+    // 查詢會員的所有資金流水，按時間倒序排列
     List<WalletTransaction> findByMemberIdOrderByCreatedAtDesc(Integer memberId);
 }

@@ -6,14 +6,12 @@
     <title>星際交易所 - 主控台</title>
     <link rel="stylesheet" href="style.css">
     <style>
-        /* 頁面特定樣式 (Page-Specific Styles)
-           用於處理個人資料頁面的「檢視模式」與「編輯模式」切換
-        */
-        .edit-mode { display: none; } /* 預設隱藏編輯元件 */
-        .editing .edit-mode { display: block; } /* 若容器有 .editing 類別，則顯示編輯元件 */
-        .editing .view-mode { display: none; } /* 若容器有 .editing 類別，則隱藏檢視元件 */
+        /* 頁面特定樣式 (Page-Specific Styles) */
+        /* 用於個人資料頁的「檢視模式」與「編輯模式」切換邏輯 */
+        .edit-mode { display: none; } /* 預設隱藏編輯輸入框 */
+        .editing .edit-mode { display: block; } /* 當父層有 .editing 時顯示 */
+        .editing .view-mode { display: none; } /* 當父層有 .editing 時隱藏純文字 */
         
-        /* 通用按鈕群組樣式 */
         .btn-group {
             display: flex;
             gap: 10px;

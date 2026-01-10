@@ -1,28 +1,44 @@
+// ====== 檔案總結 ======
+// script.js 是星際交易所前端的核心邏輯控制器。
+// 架構模式：原生 JS (Vanilla JS) 實作的 SPA (Single Page Application)。
+// 主要模組：
+// 1. 導航系統 (Navigation)：控制 Panel 切換。
+// 2. 認證系統 (Auth)：登入、註冊、Session 檢查。
+// 3. 錢包系統 (Wallet)：資產列表渲染、儲值操作。
+// 4. 交易系統 (Trade)：K線圖表(Lightweight Charts)、訂單簿、下單、撤單、歷史紀錄。
+
 // ====== 全域常數與設定 ======
 const API_URL = '/api/members';
 const WALLET_API_URL = '/api/wallets';
 const ORDER_API_URL = '/api/orders';
 
+// 支援的幣種列表，將由後端 API 動態載入
 let SUPPORTED_COINS = []; 
 
-// ====== 全域狀態 ======
-let orderBookInterval = null; 
-let currentTradeType = 'SPOT'; 
-let currentOrderSide = 'BUY'; 
-let currentHistoryTab = 'FUNDS'; 
-let currentOrderFilter = 'ALL'; 
-let currentChartInterval = '1m'; // Default interval
-let allMyOrders = []; 
+// ====== 全域狀態變數 (State Management) ======
+let orderBookInterval = null; // 訂單簿輪詢計時器
+let currentTradeType = 'SPOT'; // 當前交易模式 (SPOT/CONTRACT)
+let currentOrderSide = 'BUY'; // 當前下單方向
+let currentHistoryTab = 'FUNDS'; // 歷史紀錄分頁
+let currentOrderFilter = 'ALL'; // 訂單篩選器
+let currentChartInterval = '1m'; // 當前 K 線週期
+let allMyOrders = []; // 快取我的訂單列表
 
+// ====== 初始化邏輯 (Initialization) ======
 window.onload = async () => {
+    // 1. 初始化下拉選單事件
     setupDropdown(); 
+    // 2. 載入系統支援幣種
     await fetchSupportedCoins(); 
     
+    // 3. 檢查登入狀態 (Session Check)
     try {
         const res = await fetch(`${API_URL}/me`);
         if(res.ok) {
+            // 已登入 -> 顯示儀表板
             showDashboard(); 
         } else {
+            // 未登入 -> 顯示登入畫面
             showLogin(); 
         }
     } catch (e) {
@@ -31,6 +47,7 @@ window.onload = async () => {
     }
 };
 
+// 輔助函式：從後端獲取幣種列表
 async function fetchSupportedCoins() {
     try {
         const res = await fetch('/api/wallets/coins'); 
@@ -46,8 +63,9 @@ async function fetchSupportedCoins() {
     }
 }
 
-// ====== 導航系統 ======
+// ====== 導航系統 (Navigation System) ======
 
+// 隱藏所有面板，並清理狀態 (如計時器、錯誤訊息)
 function hideAllPanels() {
     const panels = ['loginPanel', 'registerPanel', 'dashboardPanel', 'profilePanel', 'walletPanel', 'tradePanel'];
     panels.forEach(id => {
@@ -57,57 +75,60 @@ function hideAllPanels() {
     closeDepositModal();
     clearMsgs();
 
+    // 停止訂單簿輪詢，節省資源
     if (orderBookInterval) {
         clearInterval(orderBookInterval);
         orderBookInterval = null;
     }
 }
 
+// 顯示特定面板
 function showPanel(panelId) {
     hideAllPanels();
     const el = document.getElementById(panelId);
     if(el) el.classList.remove('hidden');
 }
 
+// 各頁面切換函式
 function showLogin() { showPanel('loginPanel'); }
 function showRegister() { showPanel('registerPanel'); }
 
 function showDashboard() {
     showPanel('dashboardPanel');
-    fetchSimpleProfile();
+    fetchSimpleProfile(); // 載入歡迎訊息
 }
 
 function showProfile() {
     showPanel('profilePanel');
-    fetchProfileDetails();
+    fetchProfileDetails(); // 載入詳細個資
 }
 
 function showWallet() {
     showPanel('walletPanel');
-    renderWallets();
+    renderWallets(); // 渲染資產列表
 }
 
+// 進入交易中心
 function showSpot() {
     showPanel('tradePanel');
     document.getElementById('tradePanelTitle').innerText = '交易中心 (Trading Center)';
     const posSection = document.getElementById('positionSection');
-    if(posSection) posSection.style.display = 'none'; 
+    if(posSection) posSection.style.display = 'none'; // 現貨模式隱藏倉位區塊
     setTradeType('SPOT'); 
     switchHistoryTab('FUNDS');
 
-    // === [新增修正] 強制圖表重新調整大小 ===
-    // 使用 setTimeout 確保 HTML 元素已經移除 hidden class 並完成渲染後才執行
+    // [修正] 強制圖表重新調整大小 (Resize Chart)
+    // 由於 div 剛從 hidden 狀態恢復，寬度可能尚未正確計算，需延遲執行
     setTimeout(() => {
         if (chart) {
             const container = document.getElementById('chartContainer');
-            // 強制圖表適應目前容器的寬高
             chart.resize(container.clientWidth, 400); 
-            // 讓 K 線圖自動縮放以填滿畫面
             chart.timeScale().fitContent(); 
         }
     }, 0);
 }
 
+// 清除所有錯誤/提示訊息
 function clearMsgs() {
     const ids = ['loginMsg', 'regMsg', 'profileMsg'];
     ids.forEach(id => {
@@ -116,8 +137,9 @@ function clearMsgs() {
     });
 }
 
-// ====== 會員認證 ======
+// ====== 會員認證 (Authentication) ======
 
+// 登入邏輯
 async function login() {
     const account = document.getElementById('loginAccount').value;
     const pass = document.getElementById('loginPassword').value;
@@ -148,6 +170,7 @@ async function login() {
     }
 }
 
+// 登出邏輯
 async function logout() {
     try {
         await fetch(`${API_URL}/logout`, { method: 'POST' });
@@ -158,6 +181,7 @@ async function logout() {
     }
 }
 
+// 註冊邏輯
 async function register() {
     const account = document.getElementById('regAccount').value;
     const pass = document.getElementById('regPassword').value;
@@ -192,6 +216,7 @@ async function register() {
     }
 }
 
+// 獲取簡易個人資料 (用於儀表板歡迎詞)
 async function fetchSimpleProfile() {
     try {
         const res = await fetch(`${API_URL}/me`);
@@ -204,14 +229,15 @@ async function fetchSimpleProfile() {
     }
 }
 
-// ====== 個人資料 ======
+// ====== 個人資料 (Profile Management) ======
 
 let currentUserData = null;
 
+// 獲取詳細個人資料
 async function fetchProfileDetails() {
     const msg = document.getElementById('profileMsg');
     msg.innerText = '';
-    disableEditMode();
+    disableEditMode(); // 重置為檢視模式
 
     try {
         const res = await fetch(`${API_URL}/me`);
@@ -219,13 +245,15 @@ async function fetchProfileDetails() {
             const data = await res.json();
             currentUserData = data;
             
+            // 填入檢視模式欄位
             document.getElementById('displayAccount').innerText = data.account;
             document.getElementById('viewName').innerText = data.name;
             document.getElementById('viewNumber').innerText = data.number;
 
+            // 填入編輯模式欄位
             document.getElementById('updateName').value = data.name;
             document.getElementById('updateNumber').value = data.number;
-            document.getElementById('updatePassword').value = '';
+            document.getElementById('updatePassword').value = ''; // 密碼欄位留空
         } else {
             msg.innerText = '無法載入資料';
         }
@@ -234,16 +262,19 @@ async function fetchProfileDetails() {
     }
 }
 
+// 切換至編輯模式：顯示輸入框，隱藏純文字
 function enableEditMode() {
     const panel = document.getElementById('profilePanel');
     panel.classList.add('editing');
 }
 
+// 切換至檢視模式
 function disableEditMode() {
     const panel = document.getElementById('profilePanel');
     panel.classList.remove('editing');
 }
 
+// 提交個人資料更新
 async function updateProfile() {
     const name = document.getElementById('updateName').value;
     const number = document.getElementById('updateNumber').value;
@@ -254,6 +285,7 @@ async function updateProfile() {
         name: name,
         number: number
     };
+    // 只有當使用者有輸入密碼時才放入 payload
     if(pass) payload.password = pass;
 
     try {
@@ -276,10 +308,11 @@ async function updateProfile() {
     }
 }
 
-// ====== 錢包管理 ======
+// ====== 錢包管理 (Wallet System) ======
 
 let currentWallets = [];
 
+// 渲染錢包列表
 async function renderWallets() {
     const listEl = document.getElementById('walletList');
     listEl.innerHTML = '<div style="color:#aaa;">載入中...</div>';
@@ -287,27 +320,27 @@ async function renderWallets() {
     try {
         const res = await fetch(WALLET_API_URL);
         if(res.ok) {
-            let data = await res.json(); // DB Wallets
+            let data = await res.json(); // 取得資料庫中的錢包資料
             
-            // [Fix]: Merge with SUPPORTED_COINS to ensure all coins are listed
+            // 邏輯：合併後端回傳的錢包與所有支援的幣種
+            // 目的是確保即使餘額為 0 的幣種也能顯示在列表中
             const walletMap = {};
             data.forEach(w => {
                 walletMap[w.coinId] = w;
             });
 
-            // Rebuild the list based on supported coins
             let mergedWallets = SUPPORTED_COINS.map(coin => {
                 if (walletMap[coin]) {
                     return walletMap[coin];
                 } else {
-                    // Virtual 0-balance wallet
+                    // 若無錢包資料，則建立虛擬的 0 餘額物件
                     return { coinId: coin, balance: 0, available: 0 };
                 }
             });
             
             currentWallets = mergedWallets; 
             
-            // 排序與過濾
+            // 處理排序與過濾 (Sort & Filter)
             const sortBy = document.getElementById('walletSortBy').value;
             const sortOrder = document.getElementById('walletSortOrder').value;
             const hideZero = document.getElementById('walletHideZero').checked;
@@ -315,10 +348,11 @@ async function renderWallets() {
             let displayData = [...mergedWallets]; 
 
             if (hideZero) {
-                // Ensure balance is number
+                // 過濾掉餘額為 0 的錢包
                 displayData = displayData.filter(w => parseFloat(w.balance) > 0);
             }
 
+            // 執行排序
             displayData.sort((a, b) => {
                 let valA = parseFloat(a.balance);
                 let valB = parseFloat(b.balance);
@@ -326,10 +360,11 @@ async function renderWallets() {
                 if (sortBy === 'NAME') {
                     return sortOrder === 'ASC' ? a.coinId.localeCompare(b.coinId) : b.coinId.localeCompare(a.coinId);
                 } 
-                // Default: BALANCE
+                // 預設按餘額排序
                 return sortOrder === 'ASC' ? valA - valB : valB - valA;
             });
 
+            // 產生 HTML
             listEl.innerHTML = '';
             if(displayData.length === 0) {
                  listEl.innerHTML = '<div style="color:#aaa; width:100%;">無相符資產</div>';
@@ -337,6 +372,7 @@ async function renderWallets() {
                 displayData.forEach(w => {
                     const div = document.createElement('div');
                     div.className = 'wallet-card';
+                    // 計算凍結金額 (總額 - 可用)
                     const frozen = parseFloat(w.balance) - parseFloat(w.available);
                     div.innerHTML = `
                         <div class="coin-title">${w.coinId}</div>
@@ -360,6 +396,7 @@ async function renderWallets() {
     }
 }
 
+// 重置所有資產 (測試用)
 async function resetWallets() {
     if(!confirm('確定要重置所有資產嗎？這將清空所有餘額並恢復預設值。')) return;
     try {
@@ -375,7 +412,7 @@ async function resetWallets() {
     }
 }
 
-// --- 儲值 Modal ---
+// --- 儲值 Modal 控制邏輯 ---
 function openDepositModal(coinId) {
     document.getElementById('depositModal').classList.remove('hidden');
     document.getElementById('depositCoinName').innerText = coinId;
@@ -387,6 +424,7 @@ function closeDepositModal() {
     if(el) el.classList.add('hidden');
 }
 
+// 提交儲值請求
 async function submitDeposit() {
     const coinId = document.getElementById('depositCoinName').innerText;
     const amount = document.getElementById('depositAmount').value;
@@ -415,10 +453,11 @@ async function submitDeposit() {
 }
 
 
-// ====== 交易核心邏輯 ======
+// ====== 交易核心邏輯 (Trading System) ======
 
 let symbolOptions = [];
 
+// 初始化下拉搜尋選單
 function setupDropdown() {
     const searchInput = document.getElementById('tradeSymbolSearch');
     const dropdownList = document.getElementById('tradeSymbolList');
@@ -426,16 +465,19 @@ function setupDropdown() {
 
     if(!searchInput || !dropdownList) return;
 
+    // 點擊輸入框時顯示下拉清單
     searchInput.addEventListener('click', (e) => {
         e.stopPropagation();
         renderSymbolDropdown(); 
         dropdownList.classList.remove('hidden');
     });
 
+    // 輸入文字時過濾清單
     searchInput.addEventListener('input', () => {
         renderSymbolDropdown(searchInput.value);
     });
 
+    // 點擊外部時關閉下拉清單
     document.addEventListener('click', (e) => {
         if (!searchInput.contains(e.target) && !dropdownList.contains(e.target)) {
             dropdownList.classList.add('hidden');
@@ -443,6 +485,7 @@ function setupDropdown() {
     });
 }
 
+// 渲染下拉選單項目
 function renderSymbolDropdown(filterText = '') {
     const dropdownList = document.getElementById('tradeSymbolList');
     dropdownList.innerHTML = '';
@@ -466,6 +509,7 @@ function renderSymbolDropdown(filterText = '') {
     });
 }
 
+// 選擇交易對
 function selectSymbol(value, text, fetchNow = true) {
     const searchInput = document.getElementById('tradeSymbolSearch');
     const hiddenInput = document.getElementById('tradeSymbol');
@@ -475,6 +519,7 @@ function selectSymbol(value, text, fetchNow = true) {
     hiddenInput.value = value;
     dropdownList.classList.add('hidden');
     
+    // 選中後立即更新數據
     if(fetchNow) {
         fetchMyOrders();
         fetchOrderBook();
@@ -483,7 +528,7 @@ function selectSymbol(value, text, fetchNow = true) {
     }
 }
 
-
+// 設定交易模式 (現貨/合約) 並載入對應的交易對列表
 function setTradeType(type) {
     if (type === 'CONTRACT') {
         console.warn("Contract trading is disabled.");
@@ -496,6 +541,7 @@ function setTradeType(type) {
     const hiddenInput = document.getElementById('tradeSymbol'); 
     const currentVal = hiddenInput.value;
     
+    // 重建交易對選項 (預設所有非 USDT 幣種配對 USDT)
     symbolOptions = [];
     const coins = SUPPORTED_COINS.filter(c => c !== 'USDT');
     
@@ -507,6 +553,7 @@ function setTradeType(type) {
         });
     });
 
+    // 恢復上次選擇或預設第一個
     const found = symbolOptions.find(o => o.value === currentVal);
     if (found) {
         selectSymbol(found.value, found.text, false);
@@ -514,11 +561,13 @@ function setTradeType(type) {
         selectSymbol(symbolOptions[0].value, symbolOptions[0].text, false);
     }
     
+    // 初始化頁面數據
     fetchMyOrders();
     fetchOrderBook();
     initChart();
     fetchCandles();
     
+    // 啟動輪詢機制 (Polling) - 每 2 秒更新一次行情
     console.log("Starting Polling for " + type);
     if (orderBookInterval) clearInterval(orderBookInterval);
     orderBookInterval = setInterval(() => {
@@ -527,6 +576,7 @@ function setTradeType(type) {
     }, 2000);
 }
 
+// 設定下單方向 (買/賣) 並切換按鈕樣式
 function setOrderSide(side) {
     currentOrderSide = side;
     
@@ -546,7 +596,7 @@ function setOrderSide(side) {
     }
 }
 
-// [New] Toggle Price Input based on Order Type
+// 根據訂單類型 (市價/限價) 切換價格輸入框的可用性
 function togglePriceInput() {
     const type = document.getElementById('tradeType').value;
     const priceInput = document.getElementById('tradePrice');
@@ -561,14 +611,16 @@ function togglePriceInput() {
     }
 }
 
+// 提交訂單
 async function submitOrder() {
     const symbolId = document.getElementById('tradeSymbol').value;
     const type = document.getElementById('tradeType').value;
     const quantity = document.getElementById('tradeQuantity').value;
     
-    // For LIMIT order, price is required
+    // 限價單才需要價格
     let price = document.getElementById('tradePrice').value;
 
+    // 驗證輸入
     if (!quantity || quantity <= 0) {
         alert('請輸入有效的數量');
         return;
@@ -590,7 +642,7 @@ async function submitOrder() {
     if (type === 'LIMIT') {
         payload.price = parseFloat(price);
     } else {
-        // Market order: price is ignored or 0
+        // 市價單價格設為 0
         payload.price = 0; 
     }
 
@@ -622,25 +674,25 @@ async function submitOrder() {
 
 
 // ====== K 線圖表模組 (Chart Module) ======
+// 使用 Lightweight Charts 庫
 let chart = null;
 let candleSeries = null;
 
-// [New] Set Chart Interval
+// 設定 K 線週期 (1m, 1h, etc.)
 function setChartInterval(interval) {
     currentChartInterval = interval;
     
-    // Select buttons within the specific group by ID
+    // 更新按鈕樣式
     const buttons = document.querySelectorAll('#chartTimeframeGroup button');
     
     if (buttons.length > 0) {
         buttons.forEach(btn => {
-            // Reset to default style first
+            // 重置預設樣式
             btn.className = 'btn btn-sm btn-secondary'; 
             btn.style.background = 'transparent';
             btn.style.color = 'var(--star-white)';
             
-            // Apply active style if text matches
-            // Use textContent to ignore CSS text-transform: uppercase
+            // 設定激活樣式
             if (btn.textContent.trim() === interval) {
                 btn.className = 'btn btn-sm';
                 btn.style.background = 'var(--neon-blue)';
@@ -649,14 +701,15 @@ function setChartInterval(interval) {
         });
     }
     
-    fetchCandles(true); // Reload data
+    fetchCandles(true); // 重新載入數據並重置縮放
 }
 
+// 初始化圖表
 function initChart() {
     const container = document.getElementById('chartContainer');
     if (!container) return;
     
-    // 如果圖表已存在，先移除舊的 (避免重複建立導致記憶體洩漏或顯示錯誤)
+    // 若圖表已存在，先銷毀以防記憶體洩漏
     if (chart) {
         chart.remove();
         chart = null;
@@ -664,39 +717,38 @@ function initChart() {
 
     // 建立圖表實例
     chart = LightweightCharts.createChart(container, {
-        width: container.clientWidth, // 設定寬度為容器當前寬度
-        height: 400, // 設定高度
-        // --- [重點修正] Layout 設定 (適配 v4 版本) ---
+        width: container.clientWidth,
+        height: 400,
+        // 設定深色主題樣式
         layout: {
-            background: { type: 'solid', color: 'transparent' }, // 背景設為透明，讓網頁的深色背景透出來
-            textColor: '#D9D9D9', // 設定文字顏色為淺灰色 (確保看得見)
+            background: { type: 'solid', color: 'transparent' }, // 透明背景
+            textColor: '#D9D9D9',
         },
-        // -------------------------------------------
         grid: {
-            vertLines: { color: 'rgba(255, 255, 255, 0.1)' }, // 垂直網格線：微透明白
-            horzLines: { color: 'rgba(255, 255, 255, 0.1)' }, // 水平網格線：微透明白
+            vertLines: { color: 'rgba(255, 255, 255, 0.1)' },
+            horzLines: { color: 'rgba(255, 255, 255, 0.1)' },
         },
         timeScale: {
             timeVisible: true,
             secondsVisible: false,
-            borderColor: 'rgba(255, 255, 255, 0.2)', // X軸邊框顏色
+            borderColor: 'rgba(255, 255, 255, 0.2)',
         },
         rightPriceScale: {
-            borderColor: 'rgba(255, 255, 255, 0.2)', // Y軸邊框顏色
+            borderColor: 'rgba(255, 255, 255, 0.2)',
         },
     });
 
-    // 加入 K 線數據系列
+    // 加入 K 線系列
     candleSeries = chart.addCandlestickSeries({
-        upColor: '#00ff88',       // 漲：綠色
-        downColor: '#ff4d4d',     // 跌：紅色
+        upColor: '#00ff88',       // 漲：綠
+        downColor: '#ff4d4d',     // 跌：紅
         borderDownColor: '#ff4d4d',
         borderUpColor: '#00ff88',
         wickDownColor: '#ff4d4d',
         wickUpColor: '#00ff88',
     });
 
-    // 監聽視窗大小改變，自動調整圖表尺寸
+    // 監聽視窗縮放事件，保持響應式
     window.addEventListener('resize', () => {
         if(chart && container) {
              chart.resize(container.clientWidth, 400);
@@ -706,65 +758,53 @@ function initChart() {
 
 /**
  * 抓取 K 線資料並更新圖表
- * @param {boolean} shouldResetZoom - 是否需要重置縮放 (預設為 false)
- * 用途：切換週期或幣種時傳入 true，讓圖表自動適配範圍；自動更新時傳入 false，避免畫面一直跳動。
+ * @param {boolean} shouldResetZoom - 是否重置縮放 (切換幣種時傳 true)
  */
 async function fetchCandles(shouldResetZoom = false) {
-    // 1. 取得目前選中的幣種，如果沒有就預設用 BTCUSDT
     const symbolId = document.getElementById('tradeSymbol').value || 'BTCUSDT';
     
-    // 2. 檢查圖表系列 (candleSeries) 是否已建立，沒建立就無法更新數據，直接返回
     if (!candleSeries) return;
 
-    // 3. 轉換成大寫以符合後端或幣安 API 格式 (例如 btcusdt -> BTCUSDT)
     const binanceSymbol = symbolId.toUpperCase();
 
     try {
-        // 4. 發送 API 請求，帶上幣種與當前的時間週期 (interval)
-        // currentChartInterval 是全域變數，例如 '1m', '15m', '1h'
+        // 透過後端 Proxy 請求 Binance 資料
         const res = await fetch(`/api/candles/proxy/${binanceSymbol}?interval=${currentChartInterval}`);
         
-        // 5. 判斷回應是否成功 (HTTP 200 OK)
         if (res.ok) {
             const data = await res.json();
             
-            // 6. 確保回傳的是陣列且有資料
             if (Array.isArray(data) && data.length > 0) {
                 
-                // 7. 資料轉換 (Mapping)
-                // 幣安 API 回傳格式通常是陣列 [time, open, high, low, close, ...]
-                // Lightweight Charts 需要物件格式 { time, open, high, low, close }
+                // 資料格式轉換：Binance Array -> Lightweight Charts Object
                 const chartData = data.map(d => ({
-                    // d[0] 是毫秒時間戳，除以 1000 轉為秒
-                    // + (8 * 3600) 是因為 Lightweight Charts 預設用 UTC，這裡手動加 8 小時轉為 UTC+8 (台灣時間)
+                    // Binance 時間為毫秒，需轉為秒。加 8 小時修正為 UTC+8
                     time: d[0] / 1000 + (8 * 3600), 
-                    open: parseFloat(d[1]),  // 開盤價 (字串轉浮點數)
-                    high: parseFloat(d[2]),  // 最高價
-                    low: parseFloat(d[3]),   // 最低價
-                    close: parseFloat(d[4])  // 收盤價
+                    open: parseFloat(d[1]),
+                    high: parseFloat(d[2]),
+                    low: parseFloat(d[3]),
+                    close: parseFloat(d[4])
                 }));
 
-                // 8. 確保資料按時間排序 (圖表庫要求時間必須遞增)
+                // 按時間排序 (圖表庫要求)
                 chartData.sort((a, b) => a.time - b.time);
                 
+                // 動態設定價格精度 (Precision)
                 const lastPrice = chartData[chartData.length - 1].close;
-                let precision = 2;   // 預設 2 位小數 (如 123.45)
-                let minMove = 0.01;  // 最小跳動單位
+                let precision = 2;
+                let minMove = 0.01;
 
                 if (lastPrice < 1) {
-                    // 如果價格小於 1 (如 DOGE, SHIB)，需要更多小數位
-                    precision = 6;      // 顯示 6 位小數
+                    precision = 6;
                     minMove = 0.000001; 
                 } else if (lastPrice < 10) {
                     precision = 4;
                     minMove = 0.0001;
                 } else if (lastPrice > 1000) {
-                    // 如果價格很大 (如 BTC)，2 位小數就夠了，甚至可以改 1 位
                     precision = 2;
                     minMove = 0.01;
                 }
 
-                // 動態套用設定給 candleSeries
                 candleSeries.applyOptions({
                     priceFormat: {
                         type: 'price',
@@ -773,33 +813,29 @@ async function fetchCandles(shouldResetZoom = false) {
                     },
                 });
                 
-                // 9. 將整理好的資料餵給圖表
+                // 更新數據
                 candleSeries.setData(chartData);
 
-                // === [修正] 改用 setTimeout 延遲執行 ===
+                // 延遲重置視圖，確保渲染完成
                 if (shouldResetZoom) {
-                    setOptimalView(); // <--- 這裡原本是 chart.timeScale().fitContent()
+                    setOptimalView(); 
                 }
-                // ======================================
-
                 return;
             }
         }
-        // 如果回應不 ok 或資料格式不對，拋出錯誤進入 catch
         throw new Error("Invalid API response");
 
     } catch (err) {
-        // 11. 錯誤處理：印出警告，並改用假資料 (Dummy Data) 顯示
-        // 這在開發階段或 API 掛掉時很有用，避免圖表全白
+        // 若 API 失敗，使用假資料填充，避免圖表空白
         console.warn("Fetch candles failed, using dummy data:", err);
         generateDummyChartData(); 
-        
         if (shouldResetZoom) {
             setOptimalView();
         }
     }
 }
 
+// 生成隨機假 K 線資料 (開發測試用)
 function generateDummyChartData() {
     const data = [];
     let time = Math.floor(Date.now() / 1000) - 1000 * 60;
@@ -825,8 +861,9 @@ function generateDummyChartData() {
 }
 
 
-// ====== 訂單列表 ======
+// ====== 訂單列表管理 (Orders) ======
 
+// 獲取我的訂單
 async function fetchMyOrders() {
     try {
         const res = await fetch(ORDER_API_URL);
@@ -839,9 +876,11 @@ async function fetchMyOrders() {
     }
 }
 
+// 設定訂單篩選器 (全部/未成交/已成交...)
 function setOrderFilter(filter) {
     currentOrderFilter = filter;
     
+    // 更新按鈕樣式
     ['ALL', 'OPEN', 'FILLED', 'CANCELED'].forEach(f => {
         const btn = document.getElementById('filter' + f);
         if(btn) {
@@ -860,11 +899,13 @@ function setOrderFilter(filter) {
     renderOrders();
 }
 
+// 渲染訂單列表
 function renderOrders() {
     const listEl = document.getElementById('orderList');
     if (!listEl) return;
     listEl.innerHTML = '';
 
+    // 根據交易模式與篩選器過濾訂單
     const orders = allMyOrders.filter(o => {
         const oType = (o.tradeType || 'SPOT'); 
         if (oType !== currentTradeType) return false;
@@ -891,6 +932,7 @@ function renderOrders() {
         const sideColor = o.side === 'BUY' ? '#00ff88' : '#ff4d4d';
         const dateStr = new Date(o.createdAt).toLocaleString();
         
+        // 未成交的訂單顯示撤單按鈕
         let actionBtn = '';
         if (o.status === 'NEW' || o.status === 'PARTIAL_FILLED') {
             actionBtn = `<button class="btn btn-sm" onclick="cancelOrder(${o.orderId})" style="background:#555; font-size:0.8em;">撤單</button>`;
@@ -914,6 +956,7 @@ function renderOrders() {
     });
 }
 
+// 撤銷訂單
 async function cancelOrder(orderId) {
     if(!confirm('確定要撤銷此訂單嗎？')) return;
     try {
@@ -942,10 +985,11 @@ async function fetchOrderBook() {
             renderOrderBook(data);
         }
     } catch (err) {
-        // console.error(err);
+        // 靜默失敗 (Polling 經常發生)
     }
 }
 
+// 渲染訂單簿 (深度圖)
 function renderOrderBook(data) {
     const asksEl = document.getElementById('orderBookAsks');
     const bidsEl = document.getElementById('orderBookBids');
@@ -954,31 +998,33 @@ function renderOrderBook(data) {
     asksEl.innerHTML = '';
     bidsEl.innerHTML = '';
 
-    // Asks
+    // 賣盤 (Asks): 價格由低到高，顯示前 12 檔
     let asks = [...data.asks].sort((a,b) => a.price - b.price); 
     asks = asks.slice(0, 12); 
     
+    // 反轉順序以符合由下而上顯示 (價格低的在最下面，接近中間市價)
+    // 注意：CSS flex-direction: column-reverse 已經處理了視覺順序
     asks.forEach(e => {
         const div = createBookItem(e.price, e.quantity, '#ff4d4d', 'SELL');
         asksEl.appendChild(div);
     });
 
-    // Bids
+    // 買盤 (Bids): 價格由高到低，顯示前 12 檔
     let bids = [...data.bids].sort((a,b) => a.price - b.price); 
     let bestBids = [...data.bids].sort((a,b) => b.price - a.price).slice(0, 12);
-    bestBids.sort((a,b) => a.price - b.price);
+    // 再次排序以確保顯示順序 (價格高的在最上面，接近中間市價)
+    bestBids.sort((a,b) => b.price - a.price); // 這邊原邏輯可能有誤，通常買盤是價格高的在上面
+    
+    // 這裡我們維持原有的排序邏輯
+    bestBids.sort((a,b) => a.price - b.price); // 重新改回由低到高，讓 DOM 順序一致
     
     bestBids.forEach(e => {
         const div = createBookItem(e.price, e.quantity, '#00f3ff', 'BUY');
         bidsEl.appendChild(div);
     });
 
-    // [New] Update Best Bid/Ask Display
-    // Best Ask is the lowest sell price (first item in sorted asks array)
+    // 更新最佳買賣價顯示
     const bestAsk = asks.length > 0 ? asks[0].price : '---';
-    // Best Bid is the highest buy price (last item in sorted bids array - actually first item in DESC sorted bids)
-    // We used slice(0, 12) from DESC sorted bids to get best bids.
-    // bestBids is then sorted ASC for display. So last element is highest.
     const bestBid = bestBids.length > 0 ? bestBids[bestBids.length - 1].price : '---';
 
     const askEl = document.getElementById('bestAskPrice');
@@ -988,6 +1034,7 @@ function renderOrderBook(data) {
     if(bidEl) bidEl.innerText = bestBid;
 }
 
+// 建立訂單簿單列 DOM
 function createBookItem(price, qty, color, itemSide) {
     const div = document.createElement('div');
     div.style.display = 'flex';
@@ -1001,8 +1048,11 @@ function createBookItem(price, qty, color, itemSide) {
         <span style="color:#ccc">${qty}</span>
     `;
     
+    // 點擊訂單簿可快速帶入價格與方向
     div.onclick = () => {
         document.getElementById('tradePrice').value = price;
+        // 點擊賣單 -> 我要買 (BUY)
+        // 點擊買單 -> 我要賣 (SELL)
         const targetSide = (itemSide === 'BUY') ? 'SELL' : 'BUY';
         setOrderSide(targetSide);
     };
@@ -1010,8 +1060,9 @@ function createBookItem(price, qty, color, itemSide) {
 }
 
 
-// ====== 歷史紀錄 ======
+// ====== 歷史紀錄 (History) ======
 
+// 切換歷史紀錄分頁 (資金/成交)
 function switchHistoryTab(tab) {
     currentHistoryTab = tab;
     
@@ -1136,44 +1187,59 @@ function renderHistoryTrades(data) {
     el.innerHTML = html;
 }
 
+// 預留方法：獲取合約倉位
 function fetchPositions() {
 }
 
+// 重置圖表視野
 function resetChartZoom() {
     if (chart) {
         setOptimalView();
     }
 }
 
+// 計算並設定最佳圖表視野 (只顯示最近 80 根 K 線)
 function setOptimalView() {
     if (!chart || !candleSeries) return;
 
     const data = candleSeries.data();
     if (data.length === 0) return;
 
-    // 設定顯示最近 80 根
+    // 設定顯示範圍
     const visibleCandles = 80;
     const totalLength = data.length;
     const fromIndex = totalLength - visibleCandles;
-    const toIndex = totalLength + 5; 
+    const toIndex = totalLength + 5; // 右側留白
 
     setTimeout(() => {
-        // 1. 設定 X 軸 (時間) 範圍
+        // 設定 X 軸範圍
         chart.timeScale().setVisibleLogicalRange({
             from: fromIndex,
             to: toIndex
         });
 
-        // 2. [新增] 強制 Y 軸 (價格) 根據目前的可見範圍進行 "Auto Scale"
-        // 這會忽略掉畫面以外的極端價格，讓當前的 K 線胖瘦適中
+        // 強制 Y 軸自動縮放 (Auto Scale)，忽略畫面外極端值
         chart.priceScale('right').applyOptions({
-            autoScale: true, // 開啟自動縮放
-            scaleMargins: {  // 設定上下邊界留白，讓 K 線不要頂天立地
-                top: 0.1,    // 上面留 10% 空白
-                bottom: 0.1, // 下面留 10% 空白
+            autoScale: true, 
+            scaleMargins: {  
+                top: 0.1,    // 頂部留白
+                bottom: 0.1, // 底部留白
             },
         });
 
+        // 稍微往左滾動，確保最新 K 線可見
         chart.timeScale().scrollToPosition(5, true); 
     }, 10);
 }
+// ====== 備註區 ======
+/*
+[註1] 輪詢效能 (Polling Performance):
+      目前使用 `setInterval` 每 2 秒請求一次 API 來更新訂單簿與 K 線。
+      這會對伺服器造成較大負載。
+      建議改用 WebSocket (如 STOMP over WebSocket)，實現伺服器主動推播 (Push Notification)，
+      僅在資料變動時更新，大幅降低頻寬消耗。
+
+[註2] 錯誤處理 (Error Handling):
+      目前的 `try-catch` 區塊多為靜默失敗或簡單印出 console error。
+      建議建立統一的 Notification 元件 (如 Toast 訊息)，在 API 失敗時給予用戶友善的提示。
+*/

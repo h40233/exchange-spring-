@@ -1,69 +1,95 @@
+/* ====== 檔案總結 ====== */
+/* style.css 定義了整個應用程式的視覺風格。 */
+/* 設計主題：星際/賽博龐克 (Space/Cyberpunk Theme)。 */
+/* 核心技術： */
+/* 1. CSS Variables (:root) 管理全域配色。 */
+/* 2. Glassmorphism (背景模糊 + 半透明) 營造現代感。 */
+/* 3. Keyframes 動畫製作背景星空流動效果。 */
+/* 4. Flexbox 與 Grid 佈局管理。 */
+
 :root {
-    /* CSS 變數定義 (Design Tokens) */
+    /* CSS 變數定義 (Design Tokens) - 方便統一修改主題色 */
+    /* 背景基底色：深邃太空黑 */
     --space-black: #0b0d17;
+    /* 主要文字色：星光白 */
     --star-white: #ffffff;
-    --neon-blue: #00f3ff;   /* 買入/正面訊息 */
-    --neon-purple: #bc13fe; /* 強調/標題 */
-    --glass-bg: rgba(20, 20, 30, 0.6); /* 加深背景色，提高對比度 */
-    --glass-border: rgba(255, 255, 255, 0.1); /* 玻璃邊框色 */
-    --input-bg: rgba(0, 0, 0, 0.5); /* 輸入框背景 */
+    /* 買入/成功/正向訊號：霓虹藍 */
+    --neon-blue: #00f3ff;
+    /* 強調/賣出/標題：霓虹紫 */
+    --neon-purple: #bc13fe;
+    /* 容器背景：深色半透明，搭配 backdrop-filter 實現毛玻璃 */
+    --glass-bg: rgba(20, 20, 30, 0.6);
+    /* 容器邊框：微亮白色，模擬玻璃邊緣反光 */
+    --glass-border: rgba(255, 255, 255, 0.1);
+    /* 輸入框背景：半透明黑，增加對比度 */
+    --input-bg: rgba(0, 0, 0, 0.5);
 }
 
 body {
+    /* 重置邊距 */
     margin: 0;
     padding: 0;
+    /* 設定主背景色 */
     background-color: var(--space-black);
+    /* 背景光暈效果：使用徑向漸層模擬星雲 */
     background-image: 
         radial-gradient(circle at 10% 20%, rgba(188, 19, 254, 0.2) 0%, transparent 20%),
         radial-gradient(circle at 90% 80%, rgba(0, 243, 255, 0.15) 0%, transparent 20%);
+    /* 設定全域字體 */
     color: var(--star-white);
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    /* 使用 Flexbox 進行版面置中與佈局 */
     display: flex;
     justify-content: center;
-    align-items: flex-start; /* 改為靠上對齊，避免長頁面切版 */
+    align-items: flex-start; /* 內容靠上對齊，避免長頁面被切卡 */
     min-height: 100vh;
+    /* 允許垂直捲動 */
     overflow-y: auto;
+    /* 頂部留白，避免內容貼頂 */
     padding-top: 50px;
     box-sizing: border-box;
 }
 
-/* 確保所有元素預設 dark mode */
+/* 全域設定：所有元素包含邊框與內距在寬度計算內 */
 * {
     box-sizing: border-box;
 }
 
+/* 表單元素繼承字體設定 */
 input, select, button, textarea {
     font-family: inherit;
     color: var(--star-white);
 }
 
-/* 輸入框統一樣式 */
+/* 輸入框統一樣式設計 */
 input[type="text"], input[type="password"], input[type="number"], select {
     background: var(--input-bg);
     border: 1px solid var(--glass-border);
     color: var(--star-white);
     padding: 10px;
-    border-radius: 8px;
+    border-radius: 8px; /* 圓角設計 */
     width: 100%;
-    outline: none;
-    transition: border-color 0.3s;
+    outline: none; /* 移除預設聚焦外框 */
+    transition: border-color 0.3s; /* 邊框顏色過渡動畫 */
 }
 
+/* 輸入框聚焦時的互動反饋：邊框變為霓虹藍 */
 input:focus, select:focus {
     border-color: var(--neon-blue);
 }
 
-/* 星星背景動畫 */
+/* 背景星空動畫層 */
 .stars {
-    position: fixed;
+    position: fixed; /* 固定定位，不隨卷軸移動 */
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    pointer-events: none;
+    pointer-events: none; /* 允許點擊穿透，不阻擋下方互動 */
     background: transparent;
-    z-index: -1;
+    z-index: -1; /* 置於最底層 */
 }
+/* 使用偽元素繪製星星 */
 .stars::after {
     content: "";
     position: absolute;
@@ -71,52 +97,56 @@ input:focus, select:focus {
     left: -50%;
     width: 200%;
     height: 200%;
+    /* 使用多重徑向漸層繪製大小不一的星星 */
     background-image: 
         radial-gradient(2px 2px at 20px 30px, #fff, rgba(0,0,0,0)),
         radial-gradient(2px 2px at 40px 70px, #fff, rgba(0,0,0,0)),
         radial-gradient(2px 2px at 50px 160px, #fff, rgba(0,0,0,0)),
         radial-gradient(2px 2px at 90px 40px, #fff, rgba(0,0,0,0)),
         radial-gradient(2px 2px at 130px 80px, #fff, rgba(0,0,0,0));
-    background-size: 200px 200px;
-    animation: moveStars 100s linear infinite;
-    opacity: 0.3;
+    background-size: 200px 200px; /* 定義星星圖案的重複單元 */
+    animation: moveStars 100s linear infinite; /* 啟動緩慢移動動畫 */
+    opacity: 0.3; /* 降低亮度，避免干擾前景 */
 }
 
+/* 星星移動動畫關鍵影格 */
 @keyframes moveStars {
     from { transform: translateY(0); }
     to { transform: translateY(-1000px); }
 }
 
-/* 容器樣式 */
+/* 主容器樣式 (Glassmorphism 核心) */
 .container {
     width: 100%;
-    max-width: 500px; /* 限制最大寬度，避免過寬 */
+    max-width: 500px; /* 限制最大寬度，保持閱讀舒適度 */
     padding: 40px;
     background: var(--glass-bg);
-    backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px); /* 背景模糊特效 (關鍵) */
     border: 1px solid var(--glass-border);
     border-radius: 20px;
-    box-shadow: 0 0 30px rgba(0, 243, 255, 0.1);
+    box-shadow: 0 0 30px rgba(0, 243, 255, 0.1); /* 霓虹光暈陰影 */
     position: relative;
     z-index: 10;
     transition: all 0.3s ease;
-    margin: 0 auto 50px auto; /* 置中並保留底部邊距 */
+    margin: 0 auto 50px auto; /* 水平置中 */
 }
 
-/* 大型面板 (如交易介面) */
+/* 特別樣式：交易面板需要更寬的空間 */
 #tradePanel {
-    max-width: 1200px; /* 交易介面更寬 */
+    max-width: 1200px;
 }
 
+/* 標題樣式 */
 h1, h2, h3 {
     margin-top: 0;
     color: var(--star-white);
-    text-shadow: 0 0 10px rgba(255,255,255,0.3);
+    text-shadow: 0 0 10px rgba(255,255,255,0.3); /* 文字發光效果 */
 }
 
 h1 { font-size: 2.5em; text-align: center; margin-bottom: 30px; letter-spacing: 2px; }
 h2 { font-size: 1.8em; text-align: center; margin-bottom: 25px; color: var(--neon-purple); }
 
+/* 表單群組間距 */
 .form-group {
     margin-bottom: 20px;
 }
@@ -128,14 +158,15 @@ h2 { font-size: 1.8em; text-align: center; margin-bottom: 25px; color: var(--neo
     letter-spacing: 1px;
 }
 
-/* 按鈕樣式 */
+/* 按鈕基礎樣式 */
 .btn {
     width: 100%;
     padding: 12px;
     border: none;
     border-radius: 8px;
+    /* 漸層背景按鈕 */
     background: linear-gradient(90deg, var(--neon-blue), var(--neon-purple));
-    color: #000; /* 深色背景上的文字用黑色比較清晰 */
+    color: #000; /* 深色背景上的文字需為深色以確保對比度 */
     font-weight: bold;
     font-size: 1rem;
     cursor: pointer;
@@ -143,11 +174,13 @@ h2 { font-size: 1.8em; text-align: center; margin-bottom: 25px; color: var(--neo
     text-transform: uppercase;
     letter-spacing: 1px;
 }
+/* 按鈕懸停特效 */
 .btn:hover {
-    transform: scale(1.02);
-    box-shadow: 0 0 20px rgba(188, 19, 254, 0.5);
+    transform: scale(1.02); /* 微幅放大 */
+    box-shadow: 0 0 20px rgba(188, 19, 254, 0.5); /* 發光陰影 */
 }
 
+/* 次要按鈕樣式 (幽靈按鈕 Ghost Button) */
 .btn-secondary {
     background: transparent;
     border: 1px solid var(--glass-border);
@@ -159,12 +192,14 @@ h2 { font-size: 1.8em; text-align: center; margin-bottom: 25px; color: var(--neo
     box-shadow: none;
 }
 
+/* 小型按鈕 */
 .btn-sm {
     padding: 5px 10px;
     font-size: 0.8em;
     width: auto;
 }
 
+/* 返回按鈕 (純文字/圖示風格) */
 .btn-back {
     background: none;
     border: none;
@@ -176,6 +211,7 @@ h2 { font-size: 1.8em; text-align: center; margin-bottom: 25px; color: var(--neo
 }
 .btn-back:hover { color: white; }
 
+/* 切換文字 (如 "沒有帳號? 註冊") */
 .toggle-text {
     text-align: center;
     margin-top: 15px;
@@ -188,6 +224,7 @@ h2 { font-size: 1.8em; text-align: center; margin-bottom: 25px; color: var(--neo
     text-decoration: underline;
 }
 
+/* 標題列佈局 */
 .header-row {
     display: flex;
     align-items: center;
@@ -198,19 +235,21 @@ h2 { font-size: 1.8em; text-align: center; margin-bottom: 25px; color: var(--neo
     text-align: left;
 }
 
-/* 隱藏輔助類別 */
+/* 輔助類別：強制隱藏元素 */
+/* [註1] SPA 頁面切換的核心機制 */
 .hidden {
     display: none !important;
 }
 
-/* 導航網格 */
+/* 導航網格佈局 (Dashboard) */
 .nav-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr; /* 兩欄均分 */
     gap: 15px;
     margin-top: 20px;
 }
 
+/* 導航項目卡片 */
 .nav-item {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--glass-border);
@@ -223,7 +262,7 @@ h2 { font-size: 1.8em; text-align: center; margin-bottom: 25px; color: var(--neo
 .nav-item:hover {
     background: rgba(255,255,255,0.1);
     border-color: var(--neon-blue);
-    transform: translateY(-2px);
+    transform: translateY(-2px); /* 上浮特效 */
 }
 .nav-item h3 {
     margin: 0 0 10px 0;
@@ -236,18 +275,18 @@ h2 { font-size: 1.8em; text-align: center; margin-bottom: 25px; color: var(--neo
     color: #ccc;
 }
 
-/* 下拉選單 */
+/* 自定義下拉選單容器 */
 .dropdown-list {
-    position: absolute;
+    position: absolute; /* 絕對定位於輸入框下方 */
     top: 100%;
     left: 0;
     width: 100%;
     max-height: 250px;
-    overflow-y: auto;
-    background: #1a1a2e; /* 深色背景 */
+    overflow-y: auto; /* 內容過多時顯示卷軸 */
+    background: #1a1a2e;
     border: 1px solid var(--neon-blue);
     border-radius: 8px;
-    z-index: 9999;
+    z-index: 9999; /* 確保浮在最上層 */
     box-shadow: 0 0 15px rgba(0, 243, 255, 0.2);
     margin-top: 5px;
 }
@@ -260,10 +299,10 @@ h2 { font-size: 1.8em; text-align: center; margin-bottom: 25px; color: var(--neo
     background: rgba(0, 243, 255, 0.1);
 }
 
-/* 錢包卡片 */
+/* 錢包卡片網格 */
 .wallet-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); /* 響應式網格 */
     gap: 15px;
 }
 .wallet-card {
@@ -288,17 +327,18 @@ h2 { font-size: 1.8em; text-align: center; margin-bottom: 25px; color: var(--neo
     margin-bottom: 10px;
 }
 
-/* Modal */
+/* 彈出視窗 (Modal) 遮罩層 */
 .modal-overlay {
     position: fixed;
     top: 0; left: 0;
     width: 100%; height: 100%;
-    background: rgba(0,0,0,0.7);
+    background: rgba(0,0,0,0.7); /* 深色半透明背景 */
     display: flex;
     justify-content: center;
     align-items: center;
     z-index: 2000;
 }
+/* Modal 內容容器 */
 .modal-content {
     background: #151520;
     padding: 30px;
@@ -317,7 +357,7 @@ h2 { font-size: 1.8em; text-align: center; margin-bottom: 25px; color: var(--neo
 }
 .modal-close:hover { color: white; }
 
-/* 卷軸美化 */
+/* 卷軸美化 (Webkit 瀏覽器專用) */
 ::-webkit-scrollbar {
     width: 8px;
 }
@@ -331,3 +371,11 @@ h2 { font-size: 1.8em; text-align: center; margin-bottom: 25px; color: var(--neo
 ::-webkit-scrollbar-thumb:hover {
     background: #555; 
 }
+
+/* ====== 備註區 ====== */
+/*
+[註1] 隱藏類別 (.hidden):
+      配合 JavaScript 使用，透過 classList.add('hidden') 與 classList.remove('hidden')
+      來控制不同面板 (Login, Dashboard, Trade...) 的切換顯示，
+      是實現 SPA (Single Page Application) 最簡單的方式。
+*/
