@@ -44,17 +44,23 @@ public class CandleController {
     @GetMapping("/proxy/{symbol}")
     public ResponseEntity<?> getBinanceCandles(
             @PathVariable String symbol,
-            @RequestParam(defaultValue = "1m") String interval) {
+            @RequestParam(defaultValue = "1m") String interval,
+            @RequestParam(required = false) Long startTime) {
         
-        // 建構 Binance API URL
-        String url = "https://api.binance.com/api/v3/klines?symbol=" + symbol.toUpperCase() + "&interval=" + interval + "&limit=1000";
+        StringBuilder url = new StringBuilder("https://api.binance.com/api/v3/klines?symbol=")
+                .append(symbol.toUpperCase())
+                .append("&interval=").append(interval)
+                .append("&limit=1000");
         
+        if (startTime != null) {
+            url.append("&startTime=").append(startTime);
+        }
+
         try {
-            // 直接轉發請求並將原始回應傳回前端
-            Object response = restTemplate.getForObject(url, Object.class);
+            // Forward the raw response from Binance
+            Object response = restTemplate.getForObject(url.toString(), Object.class);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            // 若發生錯誤，回傳 500
             return ResponseEntity.status(500).body("Error fetching from Binance: " + e.getMessage());
         }
     }

@@ -24,6 +24,12 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
     // 查詢特定會員的歷史訂單，按建立時間倒序
     List<Order> findByMemberIdOrderByCreatedAtDesc(Integer memberId);
 
+    // Find orders by memberId and a list of statuses
+    List<Order> findByMemberIdAndStatusIn(Integer memberId, List<OrderStatus> statuses);
+
+    // Find orders by memberId, symbolId and a list of statuses
+    List<Order> findByMemberIdAndSymbolIdAndStatusIn(Integer memberId, String symbolId, List<OrderStatus> statuses);
+
     // === 撮合核心邏輯 (Matching Engine Queries) ===
 
     // 尋找「賣單」來匹配使用者的「買單」 (Buy Taker -> Sell Makers)

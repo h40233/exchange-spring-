@@ -6,16 +6,11 @@
     <title>星際交易所 - 主控台</title>
     <link rel="stylesheet" href="style.css">
     <style>
-        /* 頁面特定樣式 (Page-Specific Styles) */
-        /* 用於個人資料頁的「檢視模式」與「編輯模式」切換邏輯 */
-        .edit-mode { display: none; } /* 預設隱藏編輯輸入框 */
-        .editing .edit-mode { display: block; } /* 當父層有 .editing 時顯示 */
-        .editing .view-mode { display: none; } /* 當父層有 .editing 時隱藏純文字 */
-        
-        .btn-group {
-            display: flex;
-            gap: 10px;
-        }
+        /* 頁面特定樣式 */
+        .edit-mode { display: none; }
+        .editing .edit-mode { display: block; }
+        .editing .view-mode { display: none; }
+        .btn-group { display: flex; gap: 10px; }
     </style>
     <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
 </head>
@@ -84,6 +79,10 @@
                 <h3>交易中心</h3>
                 <p>Trading Center</p>
             </div>
+            <div class="nav-item" onclick="showSimulation()">
+                <h3 style="color: var(--sim-gold);">模擬回測</h3>
+                <p>歷史數據模擬交易</p>
+            </div>
         </div>
 
         <button class="btn btn-secondary" onclick="logout()" style="margin-top: 30px;">終止連線 (登出)</button>
@@ -96,40 +95,33 @@
         </div>
         
         <div id="profileContent" class="profile-info"> 
-            
             <div class="profile-row">
                 <span class="profile-label">帳號</span>
                 <span id="displayAccount">---</span>
             </div>
-
             <div class="form-group">
                 <label>姓名</label>
                 <div class="view-mode" id="viewName">---</div>
                 <input type="text" class="edit-mode" id="updateName">
             </div>
-
             <div class="form-group">
                 <label>通訊號碼 (電話)</label>
                 <div class="view-mode" id="viewNumber">---</div>
                 <input type="text" class="edit-mode" id="updateNumber">
             </div>
-
             <div class="form-group edit-mode"> 
                 <label>新密碼 (選填)</label>
                 <input type="password" id="updatePassword" placeholder="留空則不修改">
             </div>
-
         </div>
 
         <div style="margin-top: 20px;">
             <button id="btnEdit" class="btn view-mode" onclick="enableEditMode()">修改資料</button>
-            
             <div id="actionBtns" class="btn-group edit-mode">
                 <button class="btn" onclick="updateProfile()">保存變更</button>
                 <button class="btn btn-secondary" onclick="disableEditMode()">取消</button>
             </div>
         </div>
-
         <div id="profileMsg"></div>
     </div>
 
@@ -139,7 +131,6 @@
             <h2>我的錢包</h2>
             <button class="btn btn-sm" style="width: auto; background: linear-gradient(90deg, #ff4d4d, #bc13fe); margin: 0;" onclick="resetWallets()">一鍵重置</button>
         </div>
-        
         <div class="wallet-controls" style="margin-bottom: 20px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px;">
             <div class="control-group">
                 <label style="margin-right: 5px;">排序:</label>
@@ -158,9 +149,7 @@
                 <label for="walletHideZero" style="cursor: pointer;">隱藏 0 餘額</label>
             </div>
         </div>
-
         <div id="walletList" class="wallet-grid"></div>
-
         <div id="depositModal" class="modal-overlay hidden">
             <div class="modal-content">
                 <span class="modal-close" onclick="closeDepositModal()">&times;</span>
@@ -175,6 +164,124 @@
         </div>
     </div>
 
+    <!-- 模擬交易面板 -->
+    <div class="container hidden" id="simulationPanel" style="width: 1100px;">
+        <div class="header-row">
+            <button class="btn-back" onclick="showDashboard()">← 返回</button>
+            <h2 style="color: var(--sim-gold);">模擬回測系統</h2>
+        </div>
+
+        <!-- 設定區 -->
+        <div id="simSetup">
+            <div style="display: flex; gap: 20px; margin-bottom: 20px;">
+                <div class="form-group" style="flex: 1;">
+                    <label>交易幣種</label>
+                    <select id="simSymbol">
+                        <option value="BTCUSDT">BTC/USDT</option>
+                        <option value="ETHUSDT">ETH/USDT</option>
+                        <option value="BNBUSDT">BNB/USDT</option>
+                        <option value="SOLUSDT">SOL/USDT</option>
+                    </select>
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label>K線週期</label>
+                    <select id="simInterval">
+                        <option value="1m">1 分鐘</option>
+                        <option value="15m">15 分鐘</option>
+                        <option value="1h">1 小時</option>
+                        <option value="4h">4 小時</option>
+                        <option value="1d">1 天</option>
+                    </select>
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label>開始時間 (留空則為最新)</label>
+                    <input type="datetime-local" id="simStartTime">
+                </div>
+            </div>
+            <button class="btn btn-gold" onclick="startSimulation()">開始模擬 (Start)</button>
+        </div>
+
+        <!-- 執行區 (預設隱藏) -->
+        <div id="simRun" class="hidden">
+            <!-- 狀態儀表板 -->
+            <div class="sim-controls" style="justify-content: space-between;">
+                <div style="display: flex; gap: 15px;">
+                    <div class="sim-stat-box">
+                        <div style="font-size:0.8em; color:#ccc;">總資產 (USDT)</div>
+                        <div id="simEquity" style="font-weight:bold; font-size:1.2em;">10000.00</div>
+                    </div>
+                    <div class="sim-stat-box">
+                        <div style="font-size:0.8em; color:#ccc;">持有幣數</div>
+                        <div id="simHoldings" style="font-weight:bold; font-size:1.2em;">0.00</div>
+                    </div>
+                    <div class="sim-stat-box">
+                        <div style="font-size:0.8em; color:#ccc;">未實現盈虧</div>
+                        <div id="simPnL" style="font-weight:bold; font-size:1.2em;">0.00%</div>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-sm btn-gold" onclick="simAction('BUY')">買入 (Buy)</button>
+                    <button class="btn btn-sm btn-secondary" onclick="simAction('SELL')">賣出 (Sell)</button>
+                    <button class="btn btn-sm" onclick="finishSimulation()" style="background: #ff4d4d; border:none;">結束 (Finish)</button>
+                </div>
+            </div>
+
+            <!-- 圖表 -->
+            <div id="simChartContainer" style="width: 100%; height: 400px; background: rgba(0,0,0,0.2); margin-bottom: 20px; border-radius: 12px;"></div>
+
+            <!-- 播放控制 -->
+            <div class="sim-controls">
+                <button class="btn btn-sm" id="btnSimPause" onclick="toggleSimPause()">暫停</button>
+                <button id="simResetBtn" class="btn btn-sm" onclick="resetSimView()">
+                    <span class="icon">⟳</span> 重置視野
+                </button>
+                <div style="flex: 1; display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 0.8em;">速度:</span>
+                    <input type="range" min="100" max="2000" value="1000" class="range-slider" id="simSpeed" oninput="updateSimSpeed(this.value)" style="direction: rtl;">
+                    <span id="speedLabel" style="font-size: 0.8em;">1.0s/根</span>
+                </div>
+                <div style="font-size: 0.8em; color: #aaa;">
+                    進度: <span id="simProgress">0 / 0</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 模擬結果報告 Modal -->
+    <div id="simResultModal" class="modal-overlay hidden">
+        <div class="modal-content" style="width: 500px; text-align: center;">
+            <h2 style="color: var(--sim-gold);">模擬戰報</h2>
+            <div style="margin: 20px 0; text-align: left; padding: 0 20px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 5px;">
+                    <span>初始資金</span>
+                    <span>10,000 USDT</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 5px;">
+                    <span>最終資產</span>
+                    <span id="resFinalEquity" style="color: var(--neon-blue);">---</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 5px;">
+                    <span>總盈虧 (PnL)</span>
+                    <span id="resTotalPnL">---</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 5px;">
+                    <span>交易次數</span>
+                    <span id="resTradeCount">---</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 5px;">
+                    <span>勝率 (Win Rate)</span>
+                    <span id="resWinRate">---</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                    <span>最大回撤 (Max Drawdown)</span>
+                    <span id="resMaxDrawdown" style="color: #ff4d4d;">---</span>
+                </div>
+            </div>
+            <button class="btn btn-gold" onclick="closeSimResult()">關閉</button>
+        </div>
+    </div>
+
+    <!-- 一般交易介面 -->
     <div class="container hidden" id="tradePanel" style="width: 1100px; display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start;">
         
         <div style="width: 100%; margin-bottom: 10px;">
@@ -187,8 +294,8 @@
                 <button class="btn btn-sm btn-secondary" onclick="setChartInterval('4h')">4h</button>
                 <button class="btn btn-sm btn-secondary" onclick="setChartInterval('1d')">1d</button>
                 <button class="btn btn-sm btn-secondary" onclick="setChartInterval('1w')">1w</button>
-                <button class="btn btn-sm" onclick="resetChartZoom()" style="margin-left: 10px; background: rgba(255,255,255,0.1); border: 1px solid #777;">
-                    ⟲ 重置視野
+                <button id="resetBtn" class="btn btn-sm" onclick="setOptimalView()">
+                    <span class="icon">⟳</span> 重置視野
                 </button>
             </div>
         </div>
@@ -286,9 +393,10 @@
 
         <div id="historySection" style="width: 100%; margin-top: 20px;">
              <h3 style="text-align: left; margin-bottom: 10px; border-bottom: 1px solid #555; padding-bottom: 5px;">歷史紀錄</h3>
-             <div class="btn-group" style="margin-bottom: 15px;">
+             <div class="btn-group" style="margin-bottom: 15px; display: flex; align-items: center;">
                  <button class="btn btn-sm" id="tabHistoryFunds" onclick="switchHistoryTab('FUNDS')" style="background: var(--neon-blue); color: black;">資金流水</button>
                  <button class="btn btn-sm" id="tabHistoryTrades" onclick="switchHistoryTab('TRADES')">成交紀錄</button>
+                 <button class="btn btn-sm" onclick="refreshHistory()" style="margin-left: auto; width: auto; background: transparent; border: 1px solid #555; color: #ccc;">↻ 更新</button>
             </div>
             <div id="historyContent" style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 12px; min-height: 200px; max-height: 400px; overflow-y: auto;">
                  </div>

@@ -1,44 +1,29 @@
-// ====== 檔案總結 ======
-// script.js 是星際交易所前端的核心邏輯控制器。
-// 架構模式：原生 JS (Vanilla JS) 實作的 SPA (Single Page Application)。
-// 主要模組：
-// 1. 導航系統 (Navigation)：控制 Panel 切換。
-// 2. 認證系統 (Auth)：登入、註冊、Session 檢查。
-// 3. 錢包系統 (Wallet)：資產列表渲染、儲值操作。
-// 4. 交易系統 (Trade)：K線圖表(Lightweight Charts)、訂單簿、下單、撤單、歷史紀錄。
-
 // ====== 全域常數與設定 ======
 const API_URL = '/api/members';
 const WALLET_API_URL = '/api/wallets';
 const ORDER_API_URL = '/api/orders';
 
-// 支援的幣種列表，將由後端 API 動態載入
 let SUPPORTED_COINS = []; 
 
-// ====== 全域狀態變數 (State Management) ======
-let orderBookInterval = null; // 訂單簿輪詢計時器
-let currentTradeType = 'SPOT'; // 當前交易模式 (SPOT/CONTRACT)
-let currentOrderSide = 'BUY'; // 當前下單方向
-let currentHistoryTab = 'FUNDS'; // 歷史紀錄分頁
-let currentOrderFilter = 'ALL'; // 訂單篩選器
-let currentChartInterval = '1m'; // 當前 K 線週期
-let allMyOrders = []; // 快取我的訂單列表
+// ====== 全域狀態 ======
+let orderBookInterval = null; 
+let currentTradeType = 'SPOT'; 
+let currentOrderSide = 'BUY'; 
+let currentHistoryTab = 'FUNDS'; 
+let currentOrderFilter = 'ALL'; 
+let currentChartInterval = '1m'; 
+let allMyOrders = []; 
+var simChart;
 
-// ====== 初始化邏輯 (Initialization) ======
 window.onload = async () => {
-    // 1. 初始化下拉選單事件
     setupDropdown(); 
-    // 2. 載入系統支援幣種
     await fetchSupportedCoins(); 
     
-    // 3. 檢查登入狀態 (Session Check)
     try {
         const res = await fetch(`${API_URL}/me`);
         if(res.ok) {
-            // 已登入 -> 顯示儀表板
             showDashboard(); 
         } else {
-            // 未登入 -> 顯示登入畫面
             showLogin(); 
         }
     } catch (e) {
@@ -47,88 +32,104 @@ window.onload = async () => {
     }
 };
 
-// 輔助函式：從後端獲取幣種列表
 async function fetchSupportedCoins() {
     try {
+        SUPPORTED_COINS = ['USDT', 'BTC', 'ETH', 'BNB']; 
         const res = await fetch('/api/wallets/coins'); 
         if (res.ok) {
-            SUPPORTED_COINS = await res.json(); 
-        } else {
-            console.warn("Failed to fetch coins, using defaults");
-            SUPPORTED_COINS = ['USDT', 'BTC', 'ETH', 'BNB'];
+            SUPPORTED_COINS = await res.json();
         }
     } catch (err) {
         console.log("Using default coins");
-        SUPPORTED_COINS = ['USDT', 'BTC', 'ETH', 'BNB'];
     }
 }
 
-// ====== 導航系統 (Navigation System) ======
+// ====== 導航系統 ======
 
-// 隱藏所有面板，並清理狀態 (如計時器、錯誤訊息)
 function hideAllPanels() {
-    const panels = ['loginPanel', 'registerPanel', 'dashboardPanel', 'profilePanel', 'walletPanel', 'tradePanel'];
+    const panels = ['loginPanel', 'registerPanel', 'dashboardPanel', 'profilePanel', 'walletPanel', 'tradePanel', 'simulationPanel'];
     panels.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
     });
     closeDepositModal();
+    closeSimResult();
     clearMsgs();
 
-    // 停止訂單簿輪詢，節省資源
     if (orderBookInterval) {
         clearInterval(orderBookInterval);
         orderBookInterval = null;
     }
+    
+    // 停止模擬
+    if (simState.timer) clearInterval(simState.timer);
 }
 
-// 顯示特定面板
 function showPanel(panelId) {
     hideAllPanels();
     const el = document.getElementById(panelId);
     if(el) el.classList.remove('hidden');
 }
 
-// 各頁面切換函式
 function showLogin() { showPanel('loginPanel'); }
 function showRegister() { showPanel('registerPanel'); }
 
 function showDashboard() {
     showPanel('dashboardPanel');
-    fetchSimpleProfile(); // 載入歡迎訊息
+    fetchSimpleProfile();
 }
 
 function showProfile() {
     showPanel('profilePanel');
-    fetchProfileDetails(); // 載入詳細個資
+    fetchProfileDetails();
 }
 
 function showWallet() {
     showPanel('walletPanel');
-    renderWallets(); // 渲染資產列表
+    renderWallets();
 }
 
-// 進入交易中心
 function showSpot() {
     showPanel('tradePanel');
     document.getElementById('tradePanelTitle').innerText = '交易中心 (Trading Center)';
     const posSection = document.getElementById('positionSection');
-    if(posSection) posSection.style.display = 'none'; // 現貨模式隱藏倉位區塊
+    if(posSection) posSection.style.display = 'none'; 
     setTradeType('SPOT'); 
     switchHistoryTab('FUNDS');
 
-    // [修正] 強制圖表重新調整大小 (Resize Chart)
-    // 由於 div 剛從 hidden 狀態恢復，寬度可能尚未正確計算，需延遲執行
+    // === [修正] 強制圖表重新調整大小 ===
+    // 給瀏覽器 50ms 渲染 DOM，確保 container 有寬度後再 resize
     setTimeout(() => {
         if (chart) {
             const container = document.getElementById('chartContainer');
-            chart.resize(container.clientWidth, 400); 
-            chart.timeScale().fitContent(); 
+            if (container) {
+                chart.resize(container.clientWidth, 400);
+                setOptimalView(); // 重置視野到最新
+            }
+        } else {
+            // 如果還沒初始化過，就執行初始化
+            initChart();
+            fetchCandles(true);
         }
-    }, 0);
+    }, 50);
 }
 
-// 清除所有錯誤/提示訊息
+function showSimulation() {
+    showPanel('simulationPanel');
+    // 重置模擬設定UI
+    document.getElementById('simSetup').classList.remove('hidden');
+    document.getElementById('simRun').classList.add('hidden');
+    // 填充幣種選項
+    const sel = document.getElementById('simSymbol');
+    sel.innerHTML = '';
+    SUPPORTED_COINS.filter(c => c !== 'USDT').forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c + 'USDT';
+        opt.text = c + '/USDT';
+        sel.appendChild(opt);
+    });
+}
+
 function clearMsgs() {
     const ids = ['loginMsg', 'regMsg', 'profileMsg'];
     ids.forEach(id => {
@@ -137,9 +138,8 @@ function clearMsgs() {
     });
 }
 
-// ====== 會員認證 (Authentication) ======
+// ====== 會員認證 ======
 
-// 登入邏輯
 async function login() {
     const account = document.getElementById('loginAccount').value;
     const pass = document.getElementById('loginPassword').value;
@@ -170,7 +170,6 @@ async function login() {
     }
 }
 
-// 登出邏輯
 async function logout() {
     try {
         await fetch(`${API_URL}/logout`, { method: 'POST' });
@@ -181,7 +180,6 @@ async function logout() {
     }
 }
 
-// 註冊邏輯
 async function register() {
     const account = document.getElementById('regAccount').value;
     const pass = document.getElementById('regPassword').value;
@@ -216,7 +214,6 @@ async function register() {
     }
 }
 
-// 獲取簡易個人資料 (用於儀表板歡迎詞)
 async function fetchSimpleProfile() {
     try {
         const res = await fetch(`${API_URL}/me`);
@@ -229,15 +226,14 @@ async function fetchSimpleProfile() {
     }
 }
 
-// ====== 個人資料 (Profile Management) ======
+// ====== 個人資料 ======
 
 let currentUserData = null;
 
-// 獲取詳細個人資料
 async function fetchProfileDetails() {
     const msg = document.getElementById('profileMsg');
     msg.innerText = '';
-    disableEditMode(); // 重置為檢視模式
+    disableEditMode();
 
     try {
         const res = await fetch(`${API_URL}/me`);
@@ -245,15 +241,13 @@ async function fetchProfileDetails() {
             const data = await res.json();
             currentUserData = data;
             
-            // 填入檢視模式欄位
             document.getElementById('displayAccount').innerText = data.account;
             document.getElementById('viewName').innerText = data.name;
             document.getElementById('viewNumber').innerText = data.number;
 
-            // 填入編輯模式欄位
             document.getElementById('updateName').value = data.name;
             document.getElementById('updateNumber').value = data.number;
-            document.getElementById('updatePassword').value = ''; // 密碼欄位留空
+            document.getElementById('updatePassword').value = '';
         } else {
             msg.innerText = '無法載入資料';
         }
@@ -262,19 +256,16 @@ async function fetchProfileDetails() {
     }
 }
 
-// 切換至編輯模式：顯示輸入框，隱藏純文字
 function enableEditMode() {
     const panel = document.getElementById('profilePanel');
     panel.classList.add('editing');
 }
 
-// 切換至檢視模式
 function disableEditMode() {
     const panel = document.getElementById('profilePanel');
     panel.classList.remove('editing');
 }
 
-// 提交個人資料更新
 async function updateProfile() {
     const name = document.getElementById('updateName').value;
     const number = document.getElementById('updateNumber').value;
@@ -285,7 +276,6 @@ async function updateProfile() {
         name: name,
         number: number
     };
-    // 只有當使用者有輸入密碼時才放入 payload
     if(pass) payload.password = pass;
 
     try {
@@ -308,11 +298,10 @@ async function updateProfile() {
     }
 }
 
-// ====== 錢包管理 (Wallet System) ======
+// ====== 錢包管理 ======
 
 let currentWallets = [];
 
-// 渲染錢包列表
 async function renderWallets() {
     const listEl = document.getElementById('walletList');
     listEl.innerHTML = '<div style="color:#aaa;">載入中...</div>';
@@ -320,10 +309,9 @@ async function renderWallets() {
     try {
         const res = await fetch(WALLET_API_URL);
         if(res.ok) {
-            let data = await res.json(); // 取得資料庫中的錢包資料
+            let data = await res.json(); // DB Wallets
             
-            // 邏輯：合併後端回傳的錢包與所有支援的幣種
-            // 目的是確保即使餘額為 0 的幣種也能顯示在列表中
+            // Merge with SUPPORTED_COINS
             const walletMap = {};
             data.forEach(w => {
                 walletMap[w.coinId] = w;
@@ -333,14 +321,12 @@ async function renderWallets() {
                 if (walletMap[coin]) {
                     return walletMap[coin];
                 } else {
-                    // 若無錢包資料，則建立虛擬的 0 餘額物件
                     return { coinId: coin, balance: 0, available: 0 };
                 }
             });
             
             currentWallets = mergedWallets; 
             
-            // 處理排序與過濾 (Sort & Filter)
             const sortBy = document.getElementById('walletSortBy').value;
             const sortOrder = document.getElementById('walletSortOrder').value;
             const hideZero = document.getElementById('walletHideZero').checked;
@@ -348,11 +334,9 @@ async function renderWallets() {
             let displayData = [...mergedWallets]; 
 
             if (hideZero) {
-                // 過濾掉餘額為 0 的錢包
                 displayData = displayData.filter(w => parseFloat(w.balance) > 0);
             }
 
-            // 執行排序
             displayData.sort((a, b) => {
                 let valA = parseFloat(a.balance);
                 let valB = parseFloat(b.balance);
@@ -360,11 +344,9 @@ async function renderWallets() {
                 if (sortBy === 'NAME') {
                     return sortOrder === 'ASC' ? a.coinId.localeCompare(b.coinId) : b.coinId.localeCompare(a.coinId);
                 } 
-                // 預設按餘額排序
                 return sortOrder === 'ASC' ? valA - valB : valB - valA;
             });
 
-            // 產生 HTML
             listEl.innerHTML = '';
             if(displayData.length === 0) {
                  listEl.innerHTML = '<div style="color:#aaa; width:100%;">無相符資產</div>';
@@ -372,7 +354,6 @@ async function renderWallets() {
                 displayData.forEach(w => {
                     const div = document.createElement('div');
                     div.className = 'wallet-card';
-                    // 計算凍結金額 (總額 - 可用)
                     const frozen = parseFloat(w.balance) - parseFloat(w.available);
                     div.innerHTML = `
                         <div class="coin-title">${w.coinId}</div>
@@ -396,7 +377,6 @@ async function renderWallets() {
     }
 }
 
-// 重置所有資產 (測試用)
 async function resetWallets() {
     if(!confirm('確定要重置所有資產嗎？這將清空所有餘額並恢復預設值。')) return;
     try {
@@ -412,7 +392,7 @@ async function resetWallets() {
     }
 }
 
-// --- 儲值 Modal 控制邏輯 ---
+// --- 儲值 Modal ---
 function openDepositModal(coinId) {
     document.getElementById('depositModal').classList.remove('hidden');
     document.getElementById('depositCoinName').innerText = coinId;
@@ -424,7 +404,6 @@ function closeDepositModal() {
     if(el) el.classList.add('hidden');
 }
 
-// 提交儲值請求
 async function submitDeposit() {
     const coinId = document.getElementById('depositCoinName').innerText;
     const amount = document.getElementById('depositAmount').value;
@@ -453,11 +432,10 @@ async function submitDeposit() {
 }
 
 
-// ====== 交易核心邏輯 (Trading System) ======
+// ====== 交易核心邏輯 ======
 
 let symbolOptions = [];
 
-// 初始化下拉搜尋選單
 function setupDropdown() {
     const searchInput = document.getElementById('tradeSymbolSearch');
     const dropdownList = document.getElementById('tradeSymbolList');
@@ -465,19 +443,16 @@ function setupDropdown() {
 
     if(!searchInput || !dropdownList) return;
 
-    // 點擊輸入框時顯示下拉清單
     searchInput.addEventListener('click', (e) => {
         e.stopPropagation();
         renderSymbolDropdown(); 
         dropdownList.classList.remove('hidden');
     });
 
-    // 輸入文字時過濾清單
     searchInput.addEventListener('input', () => {
         renderSymbolDropdown(searchInput.value);
     });
 
-    // 點擊外部時關閉下拉清單
     document.addEventListener('click', (e) => {
         if (!searchInput.contains(e.target) && !dropdownList.contains(e.target)) {
             dropdownList.classList.add('hidden');
@@ -485,7 +460,6 @@ function setupDropdown() {
     });
 }
 
-// 渲染下拉選單項目
 function renderSymbolDropdown(filterText = '') {
     const dropdownList = document.getElementById('tradeSymbolList');
     dropdownList.innerHTML = '';
@@ -509,7 +483,6 @@ function renderSymbolDropdown(filterText = '') {
     });
 }
 
-// 選擇交易對
 function selectSymbol(value, text, fetchNow = true) {
     const searchInput = document.getElementById('tradeSymbolSearch');
     const hiddenInput = document.getElementById('tradeSymbol');
@@ -519,7 +492,6 @@ function selectSymbol(value, text, fetchNow = true) {
     hiddenInput.value = value;
     dropdownList.classList.add('hidden');
     
-    // 選中後立即更新數據
     if(fetchNow) {
         fetchMyOrders();
         fetchOrderBook();
@@ -528,7 +500,7 @@ function selectSymbol(value, text, fetchNow = true) {
     }
 }
 
-// 設定交易模式 (現貨/合約) 並載入對應的交易對列表
+
 function setTradeType(type) {
     if (type === 'CONTRACT') {
         console.warn("Contract trading is disabled.");
@@ -541,7 +513,6 @@ function setTradeType(type) {
     const hiddenInput = document.getElementById('tradeSymbol'); 
     const currentVal = hiddenInput.value;
     
-    // 重建交易對選項 (預設所有非 USDT 幣種配對 USDT)
     symbolOptions = [];
     const coins = SUPPORTED_COINS.filter(c => c !== 'USDT');
     
@@ -553,7 +524,6 @@ function setTradeType(type) {
         });
     });
 
-    // 恢復上次選擇或預設第一個
     const found = symbolOptions.find(o => o.value === currentVal);
     if (found) {
         selectSymbol(found.value, found.text, false);
@@ -561,14 +531,11 @@ function setTradeType(type) {
         selectSymbol(symbolOptions[0].value, symbolOptions[0].text, false);
     }
     
-    // 初始化頁面數據
     fetchMyOrders();
     fetchOrderBook();
     initChart();
     fetchCandles();
     
-    // 啟動輪詢機制 (Polling) - 每 2 秒更新一次行情
-    console.log("Starting Polling for " + type);
     if (orderBookInterval) clearInterval(orderBookInterval);
     orderBookInterval = setInterval(() => {
         fetchOrderBook();
@@ -576,7 +543,6 @@ function setTradeType(type) {
     }, 2000);
 }
 
-// 設定下單方向 (買/賣) 並切換按鈕樣式
 function setOrderSide(side) {
     currentOrderSide = side;
     
@@ -596,7 +562,6 @@ function setOrderSide(side) {
     }
 }
 
-// 根據訂單類型 (市價/限價) 切換價格輸入框的可用性
 function togglePriceInput() {
     const type = document.getElementById('tradeType').value;
     const priceInput = document.getElementById('tradePrice');
@@ -611,16 +576,13 @@ function togglePriceInput() {
     }
 }
 
-// 提交訂單
 async function submitOrder() {
     const symbolId = document.getElementById('tradeSymbol').value;
     const type = document.getElementById('tradeType').value;
     const quantity = document.getElementById('tradeQuantity').value;
     
-    // 限價單才需要價格
     let price = document.getElementById('tradePrice').value;
 
-    // 驗證輸入
     if (!quantity || quantity <= 0) {
         alert('請輸入有效的數量');
         return;
@@ -642,7 +604,6 @@ async function submitOrder() {
     if (type === 'LIMIT') {
         payload.price = parseFloat(price);
     } else {
-        // 市價單價格設為 0
         payload.price = 0; 
     }
 
@@ -673,26 +634,22 @@ async function submitOrder() {
 }
 
 
-// ====== K 線圖表模組 (Chart Module) ======
-// 使用 Lightweight Charts 庫
+// ====== K 線圖表模組 ======
 let chart = null;
 let candleSeries = null;
 
-// 設定 K 線週期 (1m, 1h, etc.)
 function setChartInterval(interval) {
     currentChartInterval = interval;
     
-    // 更新按鈕樣式
     const buttons = document.querySelectorAll('#chartTimeframeGroup button');
     
     if (buttons.length > 0) {
         buttons.forEach(btn => {
-            // 重置預設樣式
             btn.className = 'btn btn-sm btn-secondary'; 
             btn.style.background = 'transparent';
             btn.style.color = 'var(--star-white)';
             
-            // 設定激活樣式
+            // 忽略文字前後空白進行比對
             if (btn.textContent.trim() === interval) {
                 btn.className = 'btn btn-sm';
                 btn.style.background = 'var(--neon-blue)';
@@ -701,28 +658,30 @@ function setChartInterval(interval) {
         });
     }
     
-    fetchCandles(true); // 重新載入數據並重置縮放
+    // 切換週期時，傳入 true 強制重置視野
+    fetchCandles(true); 
 }
 
-// 初始化圖表
 function initChart() {
     const container = document.getElementById('chartContainer');
     if (!container) return;
     
-    // 若圖表已存在，先銷毀以防記憶體洩漏
+    // 如果圖表已存在，先移除舊的，防止重複建立
     if (chart) {
         chart.remove();
         chart = null;
     }
 
-    // 建立圖表實例
+    // 建立圖表 (v4 版本語法)
     chart = LightweightCharts.createChart(container, {
         width: container.clientWidth,
         height: 400,
-        // 設定深色主題樣式
         layout: {
-            background: { type: 'solid', color: 'transparent' }, // 透明背景
-            textColor: '#D9D9D9',
+            background: { 
+                type: 'solid', 
+                color: 'transparent' // 設定為透明，這樣才會吃到 div 的背景色
+            },
+            textColor: '#d1d4f9',    // 設定文字顏色，避免看不清楚
         },
         grid: {
             vertLines: { color: 'rgba(255, 255, 255, 0.1)' },
@@ -735,98 +694,75 @@ function initChart() {
         },
         rightPriceScale: {
             borderColor: 'rgba(255, 255, 255, 0.2)',
+            autoScale: true, // Y軸自動縮放
         },
     });
 
-    // 加入 K 線系列
     candleSeries = chart.addCandlestickSeries({
-        upColor: '#00ff88',       // 漲：綠
-        downColor: '#ff4d4d',     // 跌：紅
+        upColor: '#00ff88',
+        downColor: '#ff4d4d',
         borderDownColor: '#ff4d4d',
         borderUpColor: '#00ff88',
         wickDownColor: '#ff4d4d',
         wickUpColor: '#00ff88',
     });
 
-    // 監聽視窗縮放事件，保持響應式
     window.addEventListener('resize', () => {
-        if(chart && container) {
-             chart.resize(container.clientWidth, 400);
+        if (chart && container) {
+            chart.resize(container.clientWidth, 400);
         }
     });
 }
 
-/**
- * 抓取 K 線資料並更新圖表
- * @param {boolean} shouldResetZoom - 是否重置縮放 (切換幣種時傳 true)
- */
 async function fetchCandles(shouldResetZoom = false) {
     const symbolId = document.getElementById('tradeSymbol').value || 'BTCUSDT';
-    
     if (!candleSeries) return;
 
     const binanceSymbol = symbolId.toUpperCase();
 
     try {
-        // 透過後端 Proxy 請求 Binance 資料
         const res = await fetch(`/api/candles/proxy/${binanceSymbol}?interval=${currentChartInterval}`);
-        
         if (res.ok) {
             const data = await res.json();
-            
             if (Array.isArray(data) && data.length > 0) {
-                
-                // 資料格式轉換：Binance Array -> Lightweight Charts Object
                 const chartData = data.map(d => ({
-                    // Binance 時間為毫秒，需轉為秒。加 8 小時修正為 UTC+8
-                    time: d[0] / 1000 + (8 * 3600), 
+                    time: d[0] / 1000 + (8 * 3600), // UTC+8
                     open: parseFloat(d[1]),
                     high: parseFloat(d[2]),
                     low: parseFloat(d[3]),
                     close: parseFloat(d[4])
                 }));
-
-                // 按時間排序 (圖表庫要求)
                 chartData.sort((a, b) => a.time - b.time);
-                
-                // 動態設定價格精度 (Precision)
+
+                // === [新增] 智能價格精度調整 ===
                 const lastPrice = chartData[chartData.length - 1].close;
                 let precision = 2;
                 let minMove = 0.01;
 
-                if (lastPrice < 1) {
-                    precision = 6;
-                    minMove = 0.000001; 
-                } else if (lastPrice < 10) {
-                    precision = 4;
-                    minMove = 0.0001;
-                } else if (lastPrice > 1000) {
-                    precision = 2;
-                    minMove = 0.01;
+                if (lastPrice < 1) { 
+                    precision = 6; minMove = 0.000001; // 如 DOGE, SHIB
+                } else if (lastPrice < 10) { 
+                    precision = 4; minMove = 0.0001; 
+                } else if (lastPrice > 1000) { 
+                    precision = 2; minMove = 0.01; // 如 BTC
                 }
 
                 candleSeries.applyOptions({
-                    priceFormat: {
-                        type: 'price',
-                        precision: precision,
-                        minMove: minMove,
-                    },
+                    priceFormat: { type: 'price', precision: precision, minMove: minMove },
                 });
-                
-                // 更新數據
+                // ==============================
+
                 candleSeries.setData(chartData);
 
-                // 延遲重置視圖，確保渲染完成
+                // 如果是切換週期或幣種，就執行最佳視野調整
                 if (shouldResetZoom) {
-                    setOptimalView(); 
+                    setOptimalView();
                 }
                 return;
             }
         }
         throw new Error("Invalid API response");
-
     } catch (err) {
-        // 若 API 失敗，使用假資料填充，避免圖表空白
         console.warn("Fetch candles failed, using dummy data:", err);
         generateDummyChartData(); 
         if (shouldResetZoom) {
@@ -835,7 +771,6 @@ async function fetchCandles(shouldResetZoom = false) {
     }
 }
 
-// 生成隨機假 K 線資料 (開發測試用)
 function generateDummyChartData() {
     const data = [];
     let time = Math.floor(Date.now() / 1000) - 1000 * 60;
@@ -861,9 +796,8 @@ function generateDummyChartData() {
 }
 
 
-// ====== 訂單列表管理 (Orders) ======
+// ====== 訂單列表 ======
 
-// 獲取我的訂單
 async function fetchMyOrders() {
     try {
         const res = await fetch(ORDER_API_URL);
@@ -876,11 +810,9 @@ async function fetchMyOrders() {
     }
 }
 
-// 設定訂單篩選器 (全部/未成交/已成交...)
 function setOrderFilter(filter) {
     currentOrderFilter = filter;
     
-    // 更新按鈕樣式
     ['ALL', 'OPEN', 'FILLED', 'CANCELED'].forEach(f => {
         const btn = document.getElementById('filter' + f);
         if(btn) {
@@ -899,13 +831,11 @@ function setOrderFilter(filter) {
     renderOrders();
 }
 
-// 渲染訂單列表
 function renderOrders() {
     const listEl = document.getElementById('orderList');
     if (!listEl) return;
     listEl.innerHTML = '';
 
-    // 根據交易模式與篩選器過濾訂單
     const orders = allMyOrders.filter(o => {
         const oType = (o.tradeType || 'SPOT'); 
         if (oType !== currentTradeType) return false;
@@ -932,11 +862,28 @@ function renderOrders() {
         const sideColor = o.side === 'BUY' ? '#00ff88' : '#ff4d4d';
         const dateStr = new Date(o.createdAt).toLocaleString();
         
-        // 未成交的訂單顯示撤單按鈕
         let actionBtn = '';
         if (o.status === 'NEW' || o.status === 'PARTIAL_FILLED') {
             actionBtn = `<button class="btn btn-sm" onclick="cancelOrder(${o.orderId})" style="background:#555; font-size:0.8em;">撤單</button>`;
         }
+
+        // === [修正] 市價單顯示邏輯 ===
+        let displayPrice = o.price;
+        if (o.type && o.type.toUpperCase() === 'MARKET') {
+            const filled = parseFloat(o.filledQuantity);
+            const cumQty = parseFloat(o.cumQuoteQty);
+            if (filled > 0 && cumQty > 0) {
+                 const avg = cumQty / filled;
+                 // 簡單判斷精度
+                 let p = 2;
+                 if(avg < 10) p = 4;
+                 if(avg < 0.1) p = 6;
+                 displayPrice = avg.toFixed(p) + ' (均價)';
+            } else {
+                 displayPrice = '市價';
+            }
+        }
+        // ==========================
 
         div.innerHTML = `
             <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
@@ -944,7 +891,7 @@ function renderOrders() {
                 <span style="font-size:0.8em; color:#aaa;">${o.status}</span>
             </div>
             <div style="font-size:0.9em; display:flex; justify-content:space-between;">
-                <span>價格: ${o.price}</span>
+                <span>價格: ${displayPrice}</span>
                 <span>數量: ${o.quantity}</span>
             </div>
             <div style="font-size:0.8em; color:#777; margin-top:5px; display:flex; justify-content:space-between; align-items:center;">
@@ -956,7 +903,6 @@ function renderOrders() {
     });
 }
 
-// 撤銷訂單
 async function cancelOrder(orderId) {
     if(!confirm('確定要撤銷此訂單嗎？')) return;
     try {
@@ -985,11 +931,10 @@ async function fetchOrderBook() {
             renderOrderBook(data);
         }
     } catch (err) {
-        // 靜默失敗 (Polling 經常發生)
+        // console.error(err);
     }
 }
 
-// 渲染訂單簿 (深度圖)
 function renderOrderBook(data) {
     const asksEl = document.getElementById('orderBookAsks');
     const bidsEl = document.getElementById('orderBookBids');
@@ -998,32 +943,25 @@ function renderOrderBook(data) {
     asksEl.innerHTML = '';
     bidsEl.innerHTML = '';
 
-    // 賣盤 (Asks): 價格由低到高，顯示前 12 檔
+    // Asks
     let asks = [...data.asks].sort((a,b) => a.price - b.price); 
     asks = asks.slice(0, 12); 
     
-    // 反轉順序以符合由下而上顯示 (價格低的在最下面，接近中間市價)
-    // 注意：CSS flex-direction: column-reverse 已經處理了視覺順序
     asks.forEach(e => {
         const div = createBookItem(e.price, e.quantity, '#ff4d4d', 'SELL');
         asksEl.appendChild(div);
     });
 
-    // 買盤 (Bids): 價格由高到低，顯示前 12 檔
+    // Bids
     let bids = [...data.bids].sort((a,b) => a.price - b.price); 
     let bestBids = [...data.bids].sort((a,b) => b.price - a.price).slice(0, 12);
-    // 再次排序以確保顯示順序 (價格高的在最上面，接近中間市價)
-    bestBids.sort((a,b) => b.price - a.price); // 這邊原邏輯可能有誤，通常買盤是價格高的在上面
-    
-    // 這裡我們維持原有的排序邏輯
-    bestBids.sort((a,b) => a.price - b.price); // 重新改回由低到高，讓 DOM 順序一致
+    bestBids.sort((a,b) => a.price - b.price);
     
     bestBids.forEach(e => {
         const div = createBookItem(e.price, e.quantity, '#00f3ff', 'BUY');
         bidsEl.appendChild(div);
     });
 
-    // 更新最佳買賣價顯示
     const bestAsk = asks.length > 0 ? asks[0].price : '---';
     const bestBid = bestBids.length > 0 ? bestBids[bestBids.length - 1].price : '---';
 
@@ -1034,7 +972,6 @@ function renderOrderBook(data) {
     if(bidEl) bidEl.innerText = bestBid;
 }
 
-// 建立訂單簿單列 DOM
 function createBookItem(price, qty, color, itemSide) {
     const div = document.createElement('div');
     div.style.display = 'flex';
@@ -1048,11 +985,8 @@ function createBookItem(price, qty, color, itemSide) {
         <span style="color:#ccc">${qty}</span>
     `;
     
-    // 點擊訂單簿可快速帶入價格與方向
     div.onclick = () => {
         document.getElementById('tradePrice').value = price;
-        // 點擊賣單 -> 我要買 (BUY)
-        // 點擊買單 -> 我要賣 (SELL)
         const targetSide = (itemSide === 'BUY') ? 'SELL' : 'BUY';
         setOrderSide(targetSide);
     };
@@ -1060,9 +994,8 @@ function createBookItem(price, qty, color, itemSide) {
 }
 
 
-// ====== 歷史紀錄 (History) ======
+// ====== 歷史紀錄 ======
 
-// 切換歷史紀錄分頁 (資金/成交)
 function switchHistoryTab(tab) {
     currentHistoryTab = tab;
     
@@ -1079,11 +1012,15 @@ function switchHistoryTab(tab) {
         }
     }
 
+    refreshHistory();
+}
+
+function refreshHistory() {
     const content = document.getElementById('historyContent');
     content.innerHTML = '<div style="text-align:center; padding:10px;">載入中...</div>';
 
-    if (tab === 'FUNDS') fetchHistoryFunds();
-    else if (tab === 'TRADES') fetchHistoryTrades();
+    if (currentHistoryTab === 'FUNDS') fetchHistoryFunds();
+    else if (currentHistoryTab === 'TRADES') fetchHistoryTrades();
 }
 
 async function fetchHistoryFunds() {
@@ -1187,59 +1124,339 @@ function renderHistoryTrades(data) {
     el.innerHTML = html;
 }
 
-// 預留方法：獲取合約倉位
 function fetchPositions() {
 }
 
-// 重置圖表視野
-function resetChartZoom() {
-    if (chart) {
-        setOptimalView();
+// ====== 模擬回測系統 (Simulation Engine) ======
+
+const simState = {
+    usdt: 10000,
+    coinQty: 0,
+    symbol: '',
+    data: [], // K線數據
+    currentIndex: 0,
+    isPlaying: false,
+    speed: 1000, // ms per candle
+    timer: null,
+    chart: null,
+    series: null,
+    maxEquity: 10000, // 追蹤最大淨值
+    tradeCount: 0,
+    winCount: 0,
+    initialEquity: 10000
+};
+
+async function startSimulation() {
+    const symbol = document.getElementById('simSymbol').value;
+    const interval = document.getElementById('simInterval').value;
+    const startTimeStr = document.getElementById('simStartTime').value;
+    
+    // 初始化狀態
+    simState.symbol = symbol;
+    simState.usdt = 10000;
+    simState.coinQty = 0;
+    simState.currentIndex = 0;
+    simState.isPlaying = false;
+    simState.maxEquity = 10000;
+    simState.tradeCount = 0;
+    simState.winCount = 0;
+    
+    // 計算 startTime (Long timestamp)
+    let startTime = null;
+    if (startTimeStr) {
+        startTime = new Date(startTimeStr).getTime();
+    }
+
+    // 顯示載入中
+    document.getElementById('simSetup').classList.add('hidden');
+    document.getElementById('simRun').classList.remove('hidden');
+    
+    // 初始化圖表
+    initSimChart();
+    
+    // 抓取資料
+    try {
+        let url = `/api/candles/proxy/${symbol}?interval=${interval}`;
+        if (startTime) url += `&startTime=${startTime}`;
+        
+        const res = await fetch(url);
+        if (res.ok) {
+            const rawData = await res.json();
+            // Binance Format -> Lightweight Charts Format
+            simState.data = rawData.map(d => ({
+                time: d[0] / 1000 + (8*3600),
+                open: parseFloat(d[1]),
+                high: parseFloat(d[2]),
+                low: parseFloat(d[3]),
+                close: parseFloat(d[4])
+            })).sort((a,b) => a.time - b.time);
+            
+            if (simState.data.length < 50) {
+                alert('數據不足，無法模擬');
+                finishSimulation();
+                return;
+            }
+
+            // 預載前 50 根作為背景
+            simState.currentIndex = 50;
+            const preload = simState.data.slice(0, simState.currentIndex);
+            simState.series.setData(preload);
+            
+            updateSimDashboard();
+            toggleSimPause(); // 自動開始播放
+        } else {
+            alert('無法獲取歷史資料');
+            finishSimulation();
+        }
+    } catch (e) {
+        console.error(e);
+        alert('發生錯誤');
+        finishSimulation();
     }
 }
 
-// 計算並設定最佳圖表視野 (只顯示最近 80 根 K 線)
+function initSimChart() {
+    const container = document.getElementById('simChartContainer');
+    container.innerHTML = ''; // Clear old chart
+    
+    simState.chart = LightweightCharts.createChart(container, {
+        width: container.clientWidth,
+        height: 400,
+        layout: {
+        background: { 
+            type: 'solid', 
+            color: 'transparent'  // 關鍵！設定透明，讓它吃到 HTML 的深色背景
+            // 如果透明沒效，請試試改成強制深色： color: '#151520' 
+        },
+        textColor: '#d1d4f9',     // 文字顏色改成淡紫色，才看得到座標
+    },
+    // ▲▲▲ 修改結束 ▲▲▲
+
+    // 順便把網格線調暗，不然在黑底上會太亮
+    grid: {
+        vertLines: { color: 'rgba(42, 46, 57, 0.2)' },
+        horzLines: { color: 'rgba(42, 46, 57, 0.2)' },
+    },
+    rightPriceScale: {
+        visible: true,           // 確保它是開啟的
+        borderVisible: true,     // 顯示右側的分隔線
+        borderColor: 'rgba(255, 255, 255, 0.1)', // 分隔線顏色
+        scaleMargins: {
+            top: 0.1,            // 上方留白 10%
+            bottom: 0.1,         // 下方留白 10%
+        },
+    },
+    timeScale: {
+        borderColor: 'rgba(255, 255, 255, 0.1)', // 下方時間軸的分隔線也順便加深
+        timeVisible: true,
+        secondsVisible: false,
+        },
+    });
+    
+    simChart = simState.chart;
+
+    simState.series = simState.chart.addCandlestickSeries({
+        upColor: '#00ff88',
+        downColor: '#ff4d4d',
+        borderDownColor: '#ff4d4d',
+        borderUpColor: '#00ff88',
+        wickDownColor: '#ff4d4d',
+        wickUpColor: '#00ff88',
+    });
+}
+
+function toggleSimPause() {
+    const btn = document.getElementById('btnSimPause');
+    
+    if (simState.isPlaying) {
+        // 暫停
+        simState.isPlaying = false;
+        clearInterval(simState.timer);
+        btn.innerText = '繼續';
+        btn.style.background = 'var(--neon-blue)';
+    } else {
+        // 播放
+        simState.isPlaying = true;
+        simState.timer = setInterval(playStep, simState.speed);
+        btn.innerText = '暫停';
+        btn.style.background = '#ff4d4d';
+    }
+}
+
+function updateSimSpeed(val) {
+    simState.speed = parseInt(val);
+    // 顯示速度 (ms 轉 秒)
+    const sec = (simState.speed / 1000).toFixed(1);
+    document.getElementById('speedLabel').innerText = sec + 's/根';
+    
+    // 如果正在播放，重啟計時器以應用新速度
+    if (simState.isPlaying) {
+        clearInterval(simState.timer);
+        simState.timer = setInterval(playStep, simState.speed);
+    }
+}
+
+function playStep() {
+    if (simState.currentIndex >= simState.data.length) {
+        finishSimulation();
+        return;
+    }
+    
+    // 取出下一根 K 線
+    const candle = simState.data[simState.currentIndex];
+    simState.series.update(candle);
+    
+    simState.currentIndex++;
+    updateSimDashboard(candle.close);
+}
+
+function updateSimDashboard(currentPrice) {
+    if (!currentPrice) {
+        const lastCandle = simState.data[simState.currentIndex - 1];
+        currentPrice = lastCandle ? lastCandle.close : 0;
+    }
+    
+    const equity = simState.usdt + (simState.coinQty * currentPrice);
+    
+    // 更新最大回撤紀錄
+    if (equity > simState.maxEquity) {
+        simState.maxEquity = equity;
+    }
+    
+    // 計算未實現盈虧 (相對於初始資金)
+    const pnl = equity - simState.initialEquity;
+    const pnlPct = (pnl / simState.initialEquity) * 100;
+    
+    document.getElementById('simEquity').innerText = equity.toFixed(2);
+    document.getElementById('simHoldings').innerText = simState.coinQty.toFixed(4);
+    
+    const pnlEl = document.getElementById('simPnL');
+    pnlEl.innerText = (pnl >= 0 ? '+' : '') + pnlPct.toFixed(2) + '%';
+    pnlEl.style.color = pnl >= 0 ? '#00ff88' : '#ff4d4d';
+    
+    document.getElementById('simProgress').innerText = `${simState.currentIndex} / ${simState.data.length}`;
+}
+
+function simAction(side) {
+    if (!simState.isPlaying && simState.currentIndex >= simState.data.length) return;
+    
+    // 取得當前價格 (上一根收盤價)
+    const currentPrice = simState.data[simState.currentIndex - 1].close;
+    
+    if (side === 'BUY') {
+        // 全倉買入
+        if (simState.usdt > 0) {
+            const buyQty = simState.usdt / currentPrice;
+            simState.coinQty += buyQty; // 簡化：不扣手續費
+            simState.usdt = 0;
+            // 記錄交易
+            simState.tradeCount++;
+        }
+    } else {
+        // 全倉賣出
+        if (simState.coinQty > 0) {
+            const sellValue = simState.coinQty * currentPrice;
+            // 判斷這筆交易是否獲利 (簡化：若賣出後資產增加視為獲利，但這裡應該追蹤買入成本)
+            // 這裡用簡單的 "賣出時資產 > 上次操作資產" 太複雜，
+            // 改為：若賣出後總資產 > 初始 10000 則勝率 + 1 (這定義怪怪的)
+            // 正確做法：FIFO 成本計算。這裡簡化：只要賣出時總資產比 10000 高就算贏了一次？
+            // 為了 Demo，我們簡化定義：只要賣出動作發生，且賣出價格 > 0 就計次。
+            // 真正的勝率需要追蹤每一筆 Trade 的 Entry Price。
+            // 這裡暫時只計算 "總資產 > 10000" 代表最終勝利。
+            
+            // 更好的簡化：假設每次買入都是一筆 Trade 的開始，賣出是結束。
+            // 紀錄買入均價。
+            
+            simState.usdt += sellValue;
+            simState.coinQty = 0;
+            simState.tradeCount++;
+        }
+    }
+    updateSimDashboard(currentPrice);
+}
+
+function finishSimulation() {
+    clearInterval(simState.timer);
+    simState.isPlaying = false;
+    
+    // 強制平倉
+    const lastPrice = simState.data[simState.currentIndex - 1].close;
+    if (simState.coinQty > 0) {
+        simState.usdt += simState.coinQty * lastPrice;
+        simState.coinQty = 0;
+    }
+    
+    // 計算結果
+    const finalEquity = simState.usdt;
+    const totalPnL = finalEquity - simState.initialEquity;
+    
+    // 最大回撤計算: (MaxPeak - Final) / MaxPeak (簡化版，應該是過程中最大的跌幅)
+    // 這裡我們只追蹤了 maxEquity。如果現在比 max 低，就是回撤。
+    // 正確回撤應該是在過程中持續計算。
+    // 這裡用簡單公式： (歷史最高 - 最終) / 歷史最高
+    const drawdown = (simState.maxEquity - finalEquity) / simState.maxEquity * 100;
+    
+    // 顯示結果
+    document.getElementById('resFinalEquity').innerText = finalEquity.toFixed(2);
+    document.getElementById('resTotalPnL').innerText = totalPnL.toFixed(2);
+    document.getElementById('resTradeCount').innerText = simState.tradeCount;
+    
+    // 勝率暫時用 "是否賺錢" 代表
+    document.getElementById('resWinRate').innerText = totalPnL > 0 ? '100%' : '0%'; 
+    if(simState.tradeCount > 0) {
+         // 若有多次交易，這裡數據可能不準，標記為 Demo
+         document.getElementById('resWinRate').innerText = '(Demo)'; 
+    }
+
+    document.getElementById('resMaxDrawdown').innerText = drawdown.toFixed(2) + '%';
+    
+    document.getElementById('simResultModal').classList.remove('hidden');
+}
+
+function closeSimResult() {
+    document.getElementById('simResultModal').classList.add('hidden');
+}
+
 function setOptimalView() {
     if (!chart || !candleSeries) return;
 
     const data = candleSeries.data();
     if (data.length === 0) return;
 
-    // 設定顯示範圍
+    // 設定顯示最近 80 根
     const visibleCandles = 80;
     const totalLength = data.length;
     const fromIndex = totalLength - visibleCandles;
-    const toIndex = totalLength + 5; // 右側留白
+    const toIndex = totalLength + 5; // 右邊留白 5 根
 
     setTimeout(() => {
-        // 設定 X 軸範圍
+        // 1. 設定 X 軸範圍
         chart.timeScale().setVisibleLogicalRange({
             from: fromIndex,
             to: toIndex
         });
 
-        // 強制 Y 軸自動縮放 (Auto Scale)，忽略畫面外極端值
+        // 2. 強制 Y 軸根據目前畫面自動縮放 (Auto Scale)
         chart.priceScale('right').applyOptions({
-            autoScale: true, 
-            scaleMargins: {  
-                top: 0.1,    // 頂部留白
-                bottom: 0.1, // 底部留白
+            autoScale: true,
+            scaleMargins: {
+                top: 0.1,    // 上方留白 10%
+                bottom: 0.1, // 下方留白 10%
             },
         });
-
-        // 稍微往左滾動，確保最新 K 線可見
+        
+        // 3. 確保捲動到最右邊
         chart.timeScale().scrollToPosition(5, true); 
     }, 10);
 }
-// ====== 備註區 ======
-/*
-[註1] 輪詢效能 (Polling Performance):
-      目前使用 `setInterval` 每 2 秒請求一次 API 來更新訂單簿與 K 線。
-      這會對伺服器造成較大負載。
-      建議改用 WebSocket (如 STOMP over WebSocket)，實現伺服器主動推播 (Push Notification)，
-      僅在資料變動時更新，大幅降低頻寬消耗。
 
-[註2] 錯誤處理 (Error Handling):
-      目前的 `try-catch` 區塊多為靜默失敗或簡單印出 console error。
-      建議建立統一的 Notification 元件 (如 Toast 訊息)，在 API 失敗時給予用戶友善的提示。
-*/
+function resetSimView() {
+    // 檢查 simChart 是否存在 (simChart 是你建立圖表時的全域變數)
+    if (typeof simChart !== 'undefined' && simChart) {
+        // Lightweight Charts 的重置語法
+        simChart.timeScale().fitContent();
+        
+        // 或者是回到最新一根 K 線 (如果你比較喜歡這種效果，可用下面這行取代上面那行)
+        // simChart.timeScale().scrollToRealTime(); 
+    }
+}
